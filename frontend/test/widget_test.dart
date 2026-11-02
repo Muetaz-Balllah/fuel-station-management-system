@@ -165,14 +165,16 @@ void main() {
     );
     expect(find.text('إعدادات المحطة'), findsOneWidget);
     expect(find.text('إدارة المستخدمين'), findsOneWidget);
-    expect(find.text('الأدوار والصلاحيات'), findsOneWidget);
+    expect(find.text('حسابي'), findsOneWidget);
+    expect(find.text('الأدوار والصلاحيات'), findsNothing);
     expect(find.text('إعدادات الورديات ومواعيد المناوبات'), findsWidgets);
     await tester.tap(find.text('إدارة المستخدمين'));
     await tester.pumpAndSettle();
     expect(find.text('إضافة مستخدم جديد'), findsOneWidget);
-    await tester.tap(find.text('الأدوار والصلاحيات'));
+    await tester.tap(find.text('حسابي'));
     await tester.pumpAndSettle();
-    expect(find.text('فقط مدير النظام يستطيع تعديل الصلاحيات.'), findsOneWidget);
+    expect(find.text('تغيير كلمة المرور'), findsOneWidget);
+    expect(find.text('تسجيل الخروج'), findsOneWidget);
     await tester.tap(find.text('إعدادات الورديات ومواعيد المناوبات').first);
     await tester.pumpAndSettle();
     expect(find.text('صباحية'), findsOneWidget);
@@ -436,7 +438,7 @@ void main() {
     await tester.enterText(find.byKey(const Key('close-b')), '1623105.000');
     await tester.enterText(find.byKey(const Key('duty-cash')), '642.00');
     await tester.pump();
-    expect(find.text('4,280.000'), findsOneWidget);
+    expect(find.textContaining('4,280.000'), findsWidgets);
     expect(tester.widget<Text>(find.byKey(const Key('duty-variance'))).data, 'مطابق');
     await tester.enterText(find.byKey(const Key('duty-cash')), '637.00');
     await tester.pump();

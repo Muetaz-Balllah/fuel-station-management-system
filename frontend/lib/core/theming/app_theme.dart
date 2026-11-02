@@ -20,6 +20,15 @@ abstract final class AppTheme {
         displayColor: AppColors.primary,
       ),
       fontFamily: GoogleFonts.ibmPlexSansArabic().fontFamily,
+      dialogTheme: DialogThemeData(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        titleTextStyle: textTheme.titleLarge?.copyWith(
+          fontWeight: FontWeight.w700,
+          color: AppColors.primary,
+        ),
+      ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: AppColors.surface,

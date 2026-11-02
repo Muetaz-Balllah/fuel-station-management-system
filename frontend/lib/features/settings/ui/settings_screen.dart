@@ -5,7 +5,9 @@ import 'package:frontend/core/di/injection.dart';
 import 'package:frontend/core/networking/api_config.dart';
 import 'package:frontend/core/theming/app_colors.dart';
 import 'package:frontend/features/auth/logic/cubit/session_cubit.dart';
+import 'package:frontend/features/auth/ui/widgets/change_password_dialog.dart';
 import 'package:frontend/features/settings/data/models/settings_models.dart';
+import 'package:frontend/features/settings/data/shift_roster.dart';
 import 'package:frontend/features/settings/data/repos/settings_repository.dart';
 import 'package:frontend/features/settings/logic/cubit/settings_cubit.dart';
 import 'package:frontend/features/settings/ui/widgets/license_banner.dart';
@@ -34,8 +36,6 @@ class SettingsView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<SettingsCubit>().state;
-    final session = context.watch<SessionCubit>().state;
-    final canEditRoles = session is SessionSignedIn && session.user.roleCode == 'system_admin';
     return ColoredBox(
       color: AppColors.background,
       child: DefaultTabController(
@@ -62,7 +62,7 @@ class SettingsView extends StatelessWidget {
               tabs: [
                 Tab(key: Key('tab-station'), text: 'إعدادات المحطة'),
                 Tab(key: Key('tab-users'), text: 'إدارة المستخدمين'),
-                Tab(key: Key('tab-roles'), text: 'الأدوار والصلاحيات'),
+                Tab(key: Key('tab-account'), text: 'حسابي'),
                 Tab(key: Key('tab-shifts'), text: 'إعدادات الورديات ومواعيد المناوبات'),
               ],
             ),
@@ -71,7 +71,7 @@ class SettingsView extends StatelessWidget {
                 children: [
                   _StationTab(state: state),
                   _UsersTab(state: state),
-                  _RolesTab(state: state, canEdit: canEditRoles),
+                  const _AccountTab(),
                   _ShiftsTab(state: state),
                 ],
               ),
@@ -376,11 +376,9 @@ class _UsersTabState extends State<_UsersTab> {
               DropdownButton<String>(
                 value: widget.state.roleFilter,
                 items: const [
-                  DropdownMenuItem(value: 'all', child: Text('جميع الأدوار')),
+                  DropdownMenuItem(value: 'all', child: Text('الجميع')),
                   DropdownMenuItem(value: 'station_manager', child: Text('مدير المحطة')),
-                  DropdownMenuItem(value: 'operator', child: Text('موظف')),
-                  DropdownMenuItem(value: 'maintenance', child: Text('فني صيانة')),
-                  DropdownMenuItem(value: 'system_admin', child: Text('مدير النظام')),
+                  DropdownMenuItem(value: 'operator', child: Text('مشغل الوردية')),
                 ],
                 onChanged: (value) {
                   if (value != null) {
@@ -445,8 +443,7 @@ class _UsersTabState extends State<_UsersTab> {
     final email = TextEditingController(text: user?.email ?? '');
     final job = TextEditingController(text: user?.jobTitle ?? '');
     final password = TextEditingController();
-    var role = user?.roleCode ?? 'operator';
-    var maintenance = user?.isMaintenance ?? false;
+    var role = user?.roleCode == 'station_manager' ? 'station_manager' : 'operator';
     await showDialog<bool>(
       context: context,
       builder: (dialogContext) {
@@ -475,21 +472,14 @@ class _UsersTabState extends State<_UsersTab> {
                         value: role,
                         isExpanded: true,
                         items: const [
-                          DropdownMenuItem(value: 'operator', child: Text('موظف')),
+                          DropdownMenuItem(value: 'operator', child: Text('مشغل الوردية')),
                           DropdownMenuItem(value: 'station_manager', child: Text('مدير المحطة')),
-                          DropdownMenuItem(value: 'system_admin', child: Text('مدير النظام')),
                         ],
                         onChanged: (value) {
                           if (value != null) {
                             setLocal(() => role = value);
                           }
                         },
-                      ),
-                      SwitchListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text('فني صيانة'),
-                        value: maintenance,
-                        onChanged: (value) => setLocal(() => maintenance = value),
                       ),
                     ],
                   ),
@@ -505,7 +495,7 @@ class _UsersTabState extends State<_UsersTab> {
                       'email': email.text.trim(),
                       'job_title': job.text.trim(),
                       'role_code': role,
-                      'is_maintenance': maintenance,
+                      'is_maintenance': false,
                     };
                     if (password.text.isNotEmpty) {
                       body['password'] = password.text;
@@ -533,67 +523,50 @@ class _UsersTabState extends State<_UsersTab> {
   }
 }
 
-class _RolesTab extends StatelessWidget {
-  const _RolesTab({required this.state, required this.canEdit});
-
-  final SettingsState state;
-  final bool canEdit;
+class _AccountTab extends StatelessWidget {
+  const _AccountTab();
 
   @override
   Widget build(BuildContext context) {
-    if (state.roles.isEmpty) {
-      return const Center(child: Text('لا توجد أدوار.'));
-    }
+    final session = context.watch<SessionCubit>().state;
+    final user = session is SessionSignedIn ? session.user : null;
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
-        Text(
-          canEdit
-              ? 'تعديل الصلاحيات يسري بعد تسجيل الدخول التالي.'
-              : 'فقط مدير النظام يستطيع تعديل الصلاحيات.',
-          style: const TextStyle(color: AppColors.onSurfaceVariant),
+        const Text('إعدادات الحساب', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.primary)),
+        const SizedBox(height: 8),
+        const Text(
+          'النظام يقتصر على دورين ثابتين: مدير المحطة ومشغل الوردية.',
+          style: TextStyle(color: AppColors.onSurfaceVariant),
         ),
-        const SizedBox(height: 16),
-        for (final role in state.roles) _RoleCard(role: role, canEdit: canEdit),
+        if (user != null) ...[
+          const SizedBox(height: 16),
+          Text(user.fullName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+          Text(user.roleCode == 'operator' ? 'مشغل الوردية' : 'مدير المحطة'),
+        ],
+        const SizedBox(height: 24),
+        Align(
+          alignment: Alignment.centerRight,
+          child: FilledButton.icon(
+            onPressed: () => showDialog<void>(
+              context: context,
+              builder: (_) => const ChangePasswordDialog(),
+            ),
+            icon: const Icon(Icons.key_outlined),
+            label: const Text('تغيير كلمة المرور'),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Align(
+          alignment: Alignment.centerRight,
+          child: OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(foregroundColor: AppColors.error),
+            onPressed: () => context.read<SessionCubit>().signedOut(),
+            icon: const Icon(Icons.logout),
+            label: const Text('تسجيل الخروج'),
+          ),
+        ),
       ],
-    );
-  }
-}
-
-class _RoleCard extends StatelessWidget {
-  const _RoleCard({required this.role, required this.canEdit});
-
-  final RoleGrant role;
-  final bool canEdit;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 16),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(role.nameAr, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 8),
-            for (final entry in permissionLabels.entries)
-              CheckboxListTile(
-                contentPadding: EdgeInsets.zero,
-                dense: true,
-                title: Text(entry.value),
-                value: role.permissions.contains(entry.key),
-                onChanged: canEdit
-                    ? (checked) => context.read<SettingsCubit>().setPermission(
-                          role,
-                          entry.key,
-                          checked ?? false,
-                        )
-                    : null,
-              ),
-          ],
-        ),
-      ),
     );
   }
 }
@@ -627,19 +600,10 @@ class _ShiftsTab extends StatelessWidget {
         const SizedBox(height: 12),
         if (state.templates.isEmpty) const Text('لا توجد ورديات بعد.'),
         for (final template in state.templates)
-          Card(
-            child: ListTile(
-              title: Text(template.nameAr),
-              subtitle: Text(
-                '${template.startsAt} – ${template.endsAt} • مهلة ${template.graceMinutes} د'
-                '${template.crossesMidnight ? ' • تمتد لليوم التالي' : ''}'
-                '${template.isActive ? '' : ' • متوقفة'}',
-              ),
-              trailing: TextButton(
-                onPressed: () => _openForm(context, template),
-                child: const Text('تعديل'),
-              ),
-            ),
+          _ShiftCard(
+            template: template,
+            employees: state.users.where((user) => user.isActive && user.roleCode == 'operator').toList(),
+            onEdit: () => _openForm(context, template),
           ),
       ],
     );
@@ -667,5 +631,145 @@ class _ShiftsTab extends StatelessWidget {
         );
       },
     );
+  }
+}
+
+class _ShiftCard extends StatelessWidget {
+  const _ShiftCard({required this.template, required this.employees, required this.onEdit});
+
+  final ShiftTemplateItem template;
+  final List<StaffMember> employees;
+  final VoidCallback onEdit;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: ShiftRoster.updates,
+      builder: (context, _) {
+        final crew = ShiftRoster.of(template.id)?.employeeNames ?? const <String>[];
+        return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(template.nameAr, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${template.startsAt} – ${template.endsAt} • مهلة ${template.graceMinutes} د'
+                        '${template.crossesMidnight ? ' • تمتد لليوم التالي' : ''}'
+                        '${template.isActive ? '' : ' • متوقفة'}',
+                      ),
+                    ],
+                  ),
+                ),
+                TextButton(onPressed: onEdit, child: const Text('تعديل')),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              crew.isEmpty ? 'لا يوجد موظفون مرتبطون بهذه الوردية.' : 'الموظفون المكلفون: ${crew.join('، ')}',
+              style: const TextStyle(color: AppColors.onSurfaceVariant),
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: () => _assign(context),
+              icon: const Icon(Icons.group_add_outlined),
+              label: const Text('ربط الموظفين بالوردية'),
+            ),
+          ],
+        ),
+      ),
+        );
+      },
+    );
+  }
+
+  Future<void> _assign(BuildContext context) async {
+    final selected = {...?ShiftRoster.of(template.id)?.employeeNames};
+    final manual = TextEditingController();
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setLocal) {
+            return AlertDialog(
+              title: Text('تكليف موظفين — ${template.nameAr}'),
+              content: SizedBox(
+                width: 420,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const Text('اختر مشغلي الوردية الذين سيظهر لهم هذا الموعد في جدولهم.'),
+                      const SizedBox(height: 8),
+                      if (employees.isEmpty)
+                        const Text('لا يوجد مشغلو وردية مسجلون بعد. أضف اسماً يدوياً.')
+                      else
+                        for (final employee in employees)
+                          CheckboxListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: Text('${employee.fullName} • ${employee.employeeCode}'),
+                            value: selected.contains(employee.fullName),
+                            onChanged: (checked) {
+                              setLocal(() {
+                                if (checked ?? false) {
+                                  selected.add(employee.fullName);
+                                } else {
+                                  selected.remove(employee.fullName);
+                                }
+                              });
+                            },
+                          ),
+                      TextField(
+                        controller: manual,
+                        decoration: const InputDecoration(labelText: 'اسم موظف إضافي'),
+                        onSubmitted: (value) {
+                          final name = value.trim();
+                          if (name.isEmpty) {
+                            return;
+                          }
+                          setLocal(() => selected.add(name));
+                          manual.clear();
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('إلغاء')),
+                FilledButton(
+                  onPressed: () {
+                    final extra = manual.text.trim();
+                    if (extra.isNotEmpty) {
+                      selected.add(extra);
+                    }
+                    ShiftRoster.save(
+                      ShiftAssignment(
+                        templateId: template.id,
+                        shiftName: template.nameAr,
+                        window: '${template.startsAt} – ${template.endsAt}',
+                        employeeNames: selected.toList(),
+                      ),
+                    );
+                    Navigator.pop(dialogContext);
+                  },
+                  child: const Text('حفظ التكليف'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+    manual.dispose();
   }
 }

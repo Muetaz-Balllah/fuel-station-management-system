@@ -208,7 +208,7 @@ class _PumpCard extends StatelessWidget {
           const SizedBox(height: 16),
           Row(
             children: [
-              _Gauge(percent: card.tank.percent, code: card.tank.code, alert: alert),
+              _CapacityBlock(percent: card.tank.percent, code: card.tank.code, alert: alert),
               const SizedBox(width: 12),
               Expanded(
                 child: Wrap(
@@ -269,8 +269,8 @@ class _PumpCard extends StatelessWidget {
   }
 }
 
-class _Gauge extends StatelessWidget {
-  const _Gauge({required this.percent, required this.code, required this.alert});
+class _CapacityBlock extends StatelessWidget {
+  const _CapacityBlock({required this.percent, required this.code, required this.alert});
 
   final int percent;
   final String code;
@@ -278,51 +278,43 @@ class _Gauge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = alert ? _orange : AppColors.primary;
-    return SizedBox(
+    final fill = (percent.clamp(0, 100)) / 100;
+    final ink = alert ? _orange : AppColors.primary;
+    return Container(
       width: 92,
-      height: 92,
-      child: CustomPaint(
-        painter: _GaugePainter(percent: percent, color: color),
-        child: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text('$percent%', style: TextStyle(color: color, fontWeight: FontWeight.w800, fontSize: 18)),
-              Text(code, style: const TextStyle(fontSize: 10, color: AppColors.onSurfaceVariant)),
-            ],
+      height: 108,
+      decoration: BoxDecoration(
+        color: const Color(0xFFE7EEFF),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.outlineVariant),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Stack(
+        alignment: Alignment.bottomCenter,
+        children: [
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: FractionallySizedBox(
+              heightFactor: fill == 0 ? 0 : fill,
+              widthFactor: 1,
+              child: ColoredBox(color: ink),
+            ),
           ),
-        ),
+          Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '$percent%',
+                  style: TextStyle(color: fill > 0.55 ? Colors.white : AppColors.primary, fontWeight: FontWeight.w800, fontSize: 20),
+                ),
+                Text(code, style: TextStyle(fontSize: 10, color: fill > 0.55 ? const Color(0xFFE7EEFF) : AppColors.onSurfaceVariant)),
+              ],
+            ),
+          ),
+        ],
       ),
     );
-  }
-}
-
-class _GaugePainter extends CustomPainter {
-  _GaugePainter({required this.percent, required this.color});
-
-  final int percent;
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final rect = Offset.zero & size;
-    final stroke = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 8
-      ..color = const Color(0xFFE6E8EE);
-    canvas.drawArc(rect.deflate(6), -math.pi / 2, math.pi * 2, false, stroke);
-    final fill = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 8
-      ..strokeCap = StrokeCap.round
-      ..color = color;
-    canvas.drawArc(rect.deflate(6), -math.pi / 2, math.pi * 2 * (percent.clamp(0, 100) / 100), false, fill);
-  }
-
-  @override
-  bool shouldRepaint(covariant _GaugePainter oldDelegate) {
-    return oldDelegate.percent != percent || oldDelegate.color != color;
   }
 }
 

@@ -4,7 +4,7 @@ import 'package:frontend/core/theming/app_colors.dart';
 import 'package:frontend/features/auth/logic/cubit/session_cubit.dart';
 import 'package:frontend/features/dashboard/data/models/dashboard_models.dart';
 import 'package:frontend/features/dashboard/logic/cubit/notification_cubit.dart';
-import 'package:frontend/features/auth/ui/widgets/change_password_dialog.dart';
+import 'package:frontend/core/widgets/app_dialog.dart';
 import 'package:go_router/go_router.dart';
 
 class ManagerShell extends StatelessWidget {
@@ -44,11 +44,6 @@ class ManagerShell extends StatelessWidget {
             attendanceSelected: attendance,
             shiftsSelected: shifts,
             settingsSelected: settings,
-            onPassword: () => showDialog<void>(
-              context: context,
-              builder: (_) => const ChangePasswordDialog(),
-            ),
-            onLogout: () => context.read<SessionCubit>().signedOut(),
           ),
           Expanded(
             child: Column(
@@ -105,8 +100,6 @@ class _Sidebar extends StatelessWidget {
     required this.attendanceSelected,
     required this.shiftsSelected,
     required this.settingsSelected,
-    required this.onPassword,
-    required this.onLogout,
   });
 
   final bool assetsSelected;
@@ -114,8 +107,6 @@ class _Sidebar extends StatelessWidget {
   final bool attendanceSelected;
   final bool shiftsSelected;
   final bool settingsSelected;
-  final VoidCallback onPassword;
-  final VoidCallback onLogout;
 
   @override
   Widget build(BuildContext context) {
@@ -185,21 +176,15 @@ class _Sidebar extends StatelessWidget {
             child: SizedBox(
               width: double.infinity,
               child: FilledButton.icon(
-                style: FilledButton.styleFrom(backgroundColor: AppColors.warning, foregroundColor: Colors.white),
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFFFFDBCC),
+                  foregroundColor: const Color(0xFF7A3000),
+                ),
                 onPressed: () => GoRouter.maybeOf(context)?.go('/manager/supply?new=1'),
                 icon: const Icon(Icons.add_circle_outline),
                 label: const Text('طلب تزويد جديد'),
               ),
             ),
-          ),
-          TextButton(
-            onPressed: onPassword,
-            child: const Text('تغيير كلمة المرور', style: TextStyle(color: Colors.white)),
-          ),
-          TextButton.icon(
-            onPressed: onLogout,
-            icon: const Icon(Icons.logout, color: AppColors.error),
-            label: const Text('تسجيل الخروج', style: TextStyle(color: AppColors.error)),
           ),
         ],
       ),
@@ -254,29 +239,32 @@ class _BellState extends State<_Bell> {
   }
 
   Future<void> _open(BuildContext context, List<StationNotice> items) {
-    return showDialog<void>(
+    return showAppDialog<void>(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('التنبيهات'),
-          content: items.isEmpty
-              ? const Text('لا توجد تنبيهات')
-              : Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    for (final item in items)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: Text('${item.title}\n${item.body}'),
-                      ),
-                  ],
-                ),
-          actions: [
-            TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('إغلاق')),
-          ],
-        );
-      },
+      title: 'التنبيهات',
+      icon: Icons.notifications_outlined,
+      width: 520,
+      content: items.isEmpty
+          ? const Text('لا توجد تنبيهات')
+          : Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final item in items)
+                  Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.only(bottom: 10),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.outlineVariant),
+                    ),
+                    child: Text('${item.title}\n${item.body}'),
+                  ),
+              ],
+            ),
+      actions: [FilledButton(onPressed: () => Navigator.of(context).pop(), child: const Text('إغلاق'))],
     );
   }
 }
@@ -352,49 +340,47 @@ class _TopBar extends StatelessWidget {
         color: Colors.white,
         border: Border(bottom: BorderSide(color: AppColors.outlineVariant)),
       ),
-      child: Row(
-        children: [
-          Flexible(
-            child: Text(
+      child: Directionality(
+        textDirection: TextDirection.ltr,
+        child: Row(
+          children: [
+            CircleAvatar(
+              backgroundColor: AppColors.primaryContainer,
+              child: Text(initials, style: const TextStyle(color: Colors.white, fontSize: 12)),
+            ),
+            const SizedBox(width: 12),
+            Flexible(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                  ),
+                  Text(
+                    role,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 12, color: AppColors.onSurfaceVariant),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 4),
+            _Bell(cubit: notifications),
+            const Spacer(),
+            Text(
               title,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.right,
               style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
             ),
-          ),
-          const SizedBox(width: 12),
-          const Icon(Icons.circle, size: 8, color: AppColors.success),
-          const SizedBox(width: 6),
-          const Text('متصل', style: TextStyle(fontSize: 12, color: AppColors.onSurfaceVariant)),
-          const Spacer(),
-          _Bell(cubit: notifications),
-          const SizedBox(width: 8),
-          Flexible(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
-                ),
-                Text(
-                  role,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 12, color: AppColors.onSurfaceVariant),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          CircleAvatar(
-            backgroundColor: AppColors.primaryContainer,
-            child: Text(initials, style: const TextStyle(color: Colors.white, fontSize: 12)),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

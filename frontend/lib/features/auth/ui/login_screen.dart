@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:frontend/core/di/injection.dart';
+import 'package:frontend/core/widgets/app_dialog.dart';
 import 'package:frontend/core/theming/app_colors.dart';
 import 'package:frontend/features/auth/logic/cubit/login_cubit.dart';
 import 'package:frontend/features/auth/logic/cubit/session_cubit.dart';
@@ -55,18 +56,13 @@ class _LoginFormState extends State<_LoginForm> {
   }
 
   Future<void> _info(String title, String body) {
-    return showDialog<void>(
+    return showAppDialog<void>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(title),
-        content: Text(body),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('حسناً'),
-          ),
-        ],
-      ),
+      title: title,
+      content: Text(body),
+      actions: [
+        FilledButton(onPressed: () => Navigator.of(context).pop(), child: const Text('حسناً')),
+      ],
     );
   }
 

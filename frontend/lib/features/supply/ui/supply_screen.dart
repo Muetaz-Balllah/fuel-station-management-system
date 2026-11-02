@@ -1,3 +1,6 @@
+import 'dart:typed_data';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:frontend/core/di/injection.dart';
@@ -36,6 +39,7 @@ class SupplyView extends StatefulWidget {
 
 class _SupplyViewState extends State<SupplyView> {
   var _opened = false;
+  final Map<String, Uint8List> _logos = {};
 
   @override
   void initState() {
@@ -43,6 +47,15 @@ class _SupplyViewState extends State<SupplyView> {
     if (widget.openCreate) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _openOnce());
     }
+  }
+
+  Future<void> _pickLogo(String supplierId) async {
+    final result = await FilePicker.platform.pickFiles(type: FileType.image, withData: true);
+    final bytes = result?.files.single.bytes;
+    if (bytes == null || !mounted) {
+      return;
+    }
+    setState(() => _logos[supplierId] = bytes);
   }
 
   void _openOnce() {
@@ -100,28 +113,32 @@ class _SupplyViewState extends State<SupplyView> {
             ),
           ),
           const SizedBox(height: 12),
-          const Text('سجل طلبات التوريد الأخيرة', style: TextStyle(fontWeight: FontWeight.w700)),
-          const SizedBox(height: 8),
-          if (state.orders.isEmpty)
-            const Text('لا توجد طلبات توريد.')
-          else
-            for (final order in state.orders) _OrderRow(order: order),
-          const SizedBox(height: 20),
-          if (supplier != null) _SupplierCard(supplier: supplier),
-          const SizedBox(height: 12),
-          TextButton(
-            onPressed: state.suppliers.isEmpty
-                ? null
-                : () {
-                    final index = state.suppliers.indexWhere((item) => item.id == state.selectedSupplierId);
-                    final next = state.suppliers[(index + 1) % state.suppliers.length];
-                    context.read<SupplyCubit>().selectSupplier(next.id);
-                  },
-            child: const Text('عرض الكل'),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final orders = _OrdersPanel(orders: state.orders);
+              final details = _SupplierColumn(
+                state: state,
+                supplier: supplier,
+                logo: supplier == null ? null : _logos[supplier.id],
+                onPickLogo: supplier == null ? null : () => _pickLogo(supplier.id),
+              );
+              if (constraints.maxWidth < 900) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [orders, const SizedBox(height: 16), details],
+                );
+              }
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                textDirection: TextDirection.rtl,
+                children: [
+                  Expanded(flex: 3, child: orders),
+                  const SizedBox(width: 16),
+                  Expanded(flex: 2, child: details),
+                ],
+              );
+            },
           ),
-          const Text('نشاط التوريد الأسبوعي', style: TextStyle(fontWeight: FontWeight.w700)),
-          const SizedBox(height: 8),
-          _WeekBars(days: state.week),
         ],
       ),
     );
@@ -163,6 +180,92 @@ class _Counter extends StatelessWidget {
           Text(value, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.primary)),
         ],
       ),
+    );
+  }
+}
+
+class _OrdersPanel extends StatelessWidget {
+  const _OrdersPanel({required this.orders});
+
+  final List<SupplyOrderRecord> orders;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('سجل طلبات التوريد الأخيرة', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18, color: AppColors.primary)),
+          const SizedBox(height: 8),
+          if (orders.isEmpty)
+            const Text('لا توجد طلبات توريد.')
+          else
+            for (final order in orders) _OrderRow(order: order),
+        ],
+      ),
+    );
+  }
+}
+
+class _SupplierColumn extends StatelessWidget {
+  const _SupplierColumn({
+    required this.state,
+    required this.supplier,
+    required this.logo,
+    required this.onPickLogo,
+  });
+
+  final SupplyState state;
+  final SupplierRecord? supplier;
+  final Uint8List? logo;
+  final VoidCallback? onPickLogo;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (state.suppliers.length > 1)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final item in state.suppliers)
+                  ChoiceChip(
+                    label: Text(item.name),
+                    selected: item.id == supplier?.id,
+                    onSelected: (_) => context.read<SupplyCubit>().selectSupplier(item.id),
+                  ),
+              ],
+            ),
+          ),
+        if (supplier != null) _SupplierCard(supplier: supplier!, logo: logo, onPickLogo: onPickLogo),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.outlineVariant),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('نشاط التوريد الأسبوعي', style: TextStyle(fontWeight: FontWeight.w700)),
+              const SizedBox(height: 8),
+              _WeekBars(days: state.week),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
@@ -217,20 +320,48 @@ class _OrderRow extends StatelessWidget {
 }
 
 class _SupplierCard extends StatelessWidget {
-  const _SupplierCard({required this.supplier});
+  const _SupplierCard({required this.supplier, required this.logo, required this.onPickLogo});
 
   final SupplierRecord supplier;
+  final Uint8List? logo;
+  final VoidCallback? onPickLogo;
 
   @override
   Widget build(BuildContext context) {
     final score = supplier.reliability == null ? '—' : '${supplier.reliability}%';
     return Container(
       padding: const EdgeInsets.all(16),
-      color: Colors.white,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.outlineVariant),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('تفاصيل المورد الرئيسي', style: TextStyle(fontWeight: FontWeight.w700)),
+          const Text('تفاصيل المورد', style: TextStyle(fontWeight: FontWeight.w700)),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: SizedBox(
+              height: 140,
+              width: double.infinity,
+              child: logo == null
+                  ? ColoredBox(
+                      color: const Color(0xFFE7EEFF),
+                      child: Center(
+                        child: Text(supplier.name, style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.primary)),
+                      ),
+                    )
+                  : Image.memory(logo!, fit: BoxFit.cover),
+            ),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: onPickLogo,
+            icon: const Icon(Icons.add_photo_alternate_outlined),
+            label: const Text('إضافة شعار الشركة'),
+          ),
           const SizedBox(height: 8),
           Text(supplier.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.primary)),
           Text('المقر الرئيسي: ${supplier.headquarters}', key: const Key('supplier-headquarters')),

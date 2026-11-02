@@ -96,18 +96,69 @@ class AttendanceView extends StatelessWidget {
           const SizedBox(height: 12),
           _Table(rows: state.rows),
           const SizedBox(height: 24),
-          const Text('الالتزام الأسبوعي', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 12),
-          _WeekBars(days: summary?.week ?? const []),
-          const SizedBox(height: 24),
-          Container(
-            width: double.infinity,
-            color: AppColors.primary,
-            padding: const EdgeInsets.all(16),
-            child: const Text(
-              'تأكد من تسجيل البصمة عند دخول المناطق المحظورة والالتزام بمهمات الوقاية الشخصية.',
-              style: TextStyle(color: Colors.white),
-            ),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              const panelHeight = 220.0;
+              final chart = SizedBox(
+                height: panelHeight,
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.outlineVariant),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('تحليل الالتزام الأسبوعي', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.primary)),
+                      const SizedBox(height: 12),
+                      Expanded(child: _WeekBars(days: summary?.week ?? const [])),
+                    ],
+                  ),
+                ),
+              );
+              final safety = SizedBox(
+                height: panelHeight,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      Image.asset('assets/images/safety_instructions.png', fit: BoxFit.cover),
+                      Container(color: AppColors.primary.withValues(alpha: 0.72)),
+                      const Padding(
+                        padding: EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            Text('تعليمات السلامة', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 18)),
+                            SizedBox(height: 8),
+                            Text(
+                              'تأكد من تسجيل البصمة عند دخول المناطق المحظورة والالتزام بمهمات الوقاية الشخصية.',
+                              style: TextStyle(color: Colors.white, height: 1.5),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+              if (constraints.maxWidth < 860) {
+                return Column(children: [chart, const SizedBox(height: 16), safety]);
+              }
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                textDirection: TextDirection.rtl,
+                children: [
+                  Expanded(child: chart),
+                  const SizedBox(width: 16),
+                  Expanded(child: safety),
+                ],
+              );
+            },
           ),
         ],
       ),

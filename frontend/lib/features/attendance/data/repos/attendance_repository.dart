@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:frontend/core/models/paged_list.dart';
 import 'package:frontend/core/networking/api_client.dart';
 import 'package:frontend/features/attendance/data/models/attendance_models.dart';
 
@@ -27,6 +28,36 @@ class AttendanceRepository {
     });
   }
 
+  Future<List<AttendanceSessionOption>> fetchSessions(String date) {
+    return _guard(() async {
+      final response = await _dio.get('/api/v1/sessions', queryParameters: {'date': date});
+      return _list((response.data as Map<String, dynamic>)['items'], AttendanceSessionOption.fromJson);
+    });
+  }
+
+  Future<List<ShiftScheduleDay>> fetchSchedule({required String dateFrom, required String dateTo}) {
+    return _guard(() async {
+      final response = await _dio.get(
+        '/api/v1/sessions/schedule',
+        queryParameters: {'date_from': dateFrom, 'date_to': dateTo},
+      );
+      return _list((response.data as Map<String, dynamic>)['days'], ShiftScheduleDay.fromJson);
+    });
+  }
+
+  Future<void> setSessionAvailability({
+    required String templateId,
+    required String businessDate,
+    required bool active,
+  }) {
+    return _guard(() async {
+      await _dio.post(
+        '/api/v1/sessions/availability',
+        data: {'template_id': templateId, 'business_date': businessDate, 'active': active},
+      );
+    });
+  }
+
   Future<String> openSession({required String templateId, required String date}) {
     return _guard(() async {
       final response = await _dio.post(
@@ -37,10 +68,13 @@ class AttendanceRepository {
     });
   }
 
-  Future<List<AttendanceRow>> fetchAttendance(String sessionId) {
+  Future<PagedList<AttendanceRow>> fetchAttendance(String sessionId, {int page = 1, int pageSize = 10}) {
     return _guard(() async {
-      final response = await _dio.get('/api/v1/sessions/$sessionId/attendance');
-      return _list((response.data as Map<String, dynamic>)['items'], AttendanceRow.fromJson);
+      final response = await _dio.get(
+        '/api/v1/sessions/$sessionId/attendance',
+        queryParameters: {'page': page, 'page_size': pageSize},
+      );
+      return PagedList.fromJson(response.data as Map<String, dynamic>, AttendanceRow.fromJson);
     });
   }
 

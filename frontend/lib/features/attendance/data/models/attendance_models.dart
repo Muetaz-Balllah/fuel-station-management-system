@@ -24,6 +24,44 @@ class AttendanceAssignment {
   }
 }
 
+class AttendanceDutyLink {
+  const AttendanceDutyLink({
+    required this.id,
+    required this.status,
+    required this.statusLabel,
+    this.openedLabel,
+    this.submittedLabel,
+    this.liters,
+    this.expectedCash,
+    this.cashHanded,
+    this.varianceLabel,
+  });
+
+  final String id;
+  final String status;
+  final String statusLabel;
+  final String? openedLabel;
+  final String? submittedLabel;
+  final String? liters;
+  final String? expectedCash;
+  final String? cashHanded;
+  final String? varianceLabel;
+
+  factory AttendanceDutyLink.fromJson(Map<String, dynamic> json) {
+    return AttendanceDutyLink(
+      id: json['id'] as String,
+      status: json['status'] as String? ?? '',
+      statusLabel: json['status_label'] as String? ?? '',
+      openedLabel: json['opened_label'] as String?,
+      submittedLabel: json['submitted_label'] as String?,
+      liters: json['liters'] as String?,
+      expectedCash: json['expected_cash'] as String?,
+      cashHanded: json['cash_handed'] as String?,
+      varianceLabel: json['variance_label'] as String?,
+    );
+  }
+}
+
 class AttendanceRow {
   const AttendanceRow({
     required this.id,
@@ -37,6 +75,7 @@ class AttendanceRow {
     required this.checkInLabel,
     required this.checkOutLabel,
     required this.assignments,
+    this.duty,
   });
 
   final String id;
@@ -50,9 +89,11 @@ class AttendanceRow {
   final String? checkInLabel;
   final String? checkOutLabel;
   final List<AttendanceAssignment> assignments;
+  final AttendanceDutyLink? duty;
 
   factory AttendanceRow.fromJson(Map<String, dynamic> json) {
     final raw = json['assignments'] as List<dynamic>? ?? const [];
+    final dutyRaw = json['duty'] as Map<String, dynamic>?;
     return AttendanceRow(
       id: json['id'] as String,
       userId: json['user_id'] as String,
@@ -67,6 +108,74 @@ class AttendanceRow {
       assignments: raw
           .map((item) => AttendanceAssignment.fromJson(item as Map<String, dynamic>))
           .toList(),
+      duty: dutyRaw == null ? null : AttendanceDutyLink.fromJson(dutyRaw),
+    );
+  }
+}
+
+class AttendanceSessionOption {
+  const AttendanceSessionOption({
+    required this.id,
+    required this.templateId,
+    required this.templateName,
+    required this.status,
+    required this.code,
+  });
+
+  final String id;
+  final String templateId;
+  final String templateName;
+  final String status;
+  final String code;
+
+  factory AttendanceSessionOption.fromJson(Map<String, dynamic> json) {
+    return AttendanceSessionOption(
+      id: json['id'] as String,
+      templateId: json['template_id'] as String? ?? '',
+      templateName: json['template_name'] as String? ?? '',
+      status: json['status'] as String? ?? '',
+      code: json['code'] as String? ?? '',
+    );
+  }
+}
+
+class ShiftScheduleDay {
+  const ShiftScheduleDay({required this.date, required this.templates});
+
+  final String date;
+  final List<ShiftScheduleSlot> templates;
+
+  factory ShiftScheduleDay.fromJson(Map<String, dynamic> json) {
+    final raw = json['templates'] as List<dynamic>? ?? const [];
+    return ShiftScheduleDay(
+      date: json['date'] as String,
+      templates: raw.map((item) => ShiftScheduleSlot.fromJson(item as Map<String, dynamic>)).toList(),
+    );
+  }
+}
+
+class ShiftScheduleSlot {
+  const ShiftScheduleSlot({
+    required this.templateId,
+    required this.templateName,
+    required this.enabled,
+    this.sessionId,
+    this.sessionStatus,
+  });
+
+  final String templateId;
+  final String templateName;
+  final bool enabled;
+  final String? sessionId;
+  final String? sessionStatus;
+
+  factory ShiftScheduleSlot.fromJson(Map<String, dynamic> json) {
+    return ShiftScheduleSlot(
+      templateId: json['template_id'] as String,
+      templateName: json['template_name'] as String? ?? '',
+      enabled: json['enabled'] as bool? ?? true,
+      sessionId: json['session_id'] as String?,
+      sessionStatus: json['session_status'] as String?,
     );
   }
 }

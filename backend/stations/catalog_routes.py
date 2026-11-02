@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response
 from sqlmodel import Session
 
 from core.deps import require_permission
@@ -16,6 +16,7 @@ from stations.catalog import (
     add_price,
     create_product,
     create_template,
+    delete_template,
     list_prices,
     list_products,
     list_templates,
@@ -91,3 +92,13 @@ def patch_template(
     session: Session = Depends(get_session),
 ) -> ShiftPublic:
     return update_template(session, user, template_id, payload)
+
+
+@templates_router.delete("/{template_id}", status_code=204)
+def remove_template(
+    template_id: uuid.UUID,
+    user: User = Depends(require_permission("settings.manage")),
+    session: Session = Depends(get_session),
+) -> Response:
+    delete_template(session, user, template_id)
+    return Response(status_code=204)

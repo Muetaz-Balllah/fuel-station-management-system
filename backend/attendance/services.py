@@ -8,6 +8,8 @@ from sqlmodel import Session, select
 from assets.levels import station_timezone
 from assets.models import Nozzle, Pump, Tank
 from attendance.models import Attendance, ShiftAssignment, ShiftSession
+from shifts.models import ShiftDuty, ShiftReading
+from shifts.reconciliation import format_liters, format_money, q_liters, variance_label
 from core.deps import permission_codes
 from enums import PermissionCode
 from errors import AppError
@@ -26,6 +28,135 @@ STATUS_LABELS = {
 }
 _SHOWED = {"present", "late", "completed"}
 _WEEKDAYS = ["الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت", "الأحد"]
+_DUTY_STATUS_LABELS = {
+    "open": "مفتوحة",
+    "pending_approval": "بانتظار توقيع المشرف",
+    "approved": "معتمدة",
+    "rejected": "مرفوضة",
+}
+
+
+def schedule_window(session: Session, user: User, date_from: date, date_to: date) -> list[dict]:
+    if date_to < date_from:
+        raise AppError("VALIDATION_ERROR", "نهاية المدى قبل بدايته.", 422)
+    templates = session.exec(
+        select(ShiftTemplate)
+        .where(ShiftTemplate.station_id == user.station_id)
+        .order_by(ShiftTemplate.sort_order, ShiftTemplate.name_ar)
+    ).all()
+    sessions = session.exec(
+        select(ShiftSession).where(
+            ShiftSession.station_id == user.station_id,
+            ShiftSession.business_date >= date_from,
+            ShiftSession.business_date <= date_to,
+        )
+    ).all()
+    by_key = {(row.business_date, row.template_id): row for row in sessions}
+    days = []
+    cursor = date_from
+    while cursor <= date_to:
+        items = []
+        for template in templates:
+            shift = by_key.get((cursor, template.id))
+            if shift is None:
+                enabled = template.is_active
+                items.append(
+                    {
+                        "template_id": str(template.id),
+                        "template_name": template.name_ar,
+                        "session_id": None,
+                        "session_status": None,
+                        "enabled": enabled,
+                    }
+                )
+            else:
+                items.append(
+                    {
+                        "template_id": str(template.id),
+                        "template_name": template.name_ar,
+                        "session_id": str(shift.id),
+                        "session_status": shift.status,
+                        "enabled": shift.status != "cancelled",
+                    }
+                )
+        days.append({"date": cursor.isoformat(), "templates": items})
+        cursor += timedelta(days=1)
+    return days
+
+
+def set_session_availability(session: Session, user: User, template_id: str, business_date: date, active: bool) -> dict:
+    template = _template(session, user, template_id)
+    if not template.is_active and active:
+        raise AppError("TEMPLATE_INACTIVE", "هذا القالب متوقف في الإعدادات. فعّله أولاً.", 409)
+    shift = session.exec(
+        select(ShiftSession).where(
+            ShiftSession.station_id == user.station_id,
+            ShiftSession.template_id == template.id,
+            ShiftSession.business_date == business_date,
+        )
+    ).first()
+    if not active:
+        if shift is not None:
+            busy = session.exec(
+                select(ShiftDuty).where(
+                    ShiftDuty.session_id == shift.id,
+                    ShiftDuty.status.in_(["open", "pending_approval"]),  # type: ignore[attr-defined]
+                )
+            ).first()
+            if busy is not None:
+                raise AppError("DUTY_IN_PROGRESS", "لا يمكن تعطيل وردية فيها عهدة مفتوحة أو بانتظار الاعتماد.", 409)
+            shift.status = "cancelled"
+            shift.updated_at = utcnow()
+            session.add(shift)
+        else:
+            station = session.get(Station, user.station_id)
+            tz = station_timezone(station.timezone if station else "Africa/Tripoli")
+            starts, ends = _window(template, business_date, tz)
+            shift = ShiftSession(
+                station_id=user.station_id,
+                template_id=template.id,
+                supervisor_id=user.id,
+                code=_next_code(session, user.station_id, business_date.year),
+                business_date=business_date,
+                status="cancelled",
+                starts_at=starts,
+                ends_at=ends,
+            )
+            session.add(shift)
+        write_audit(
+            session,
+            actor_id=user.id,
+            action="session_disabled",
+            entity="shift_session",
+            entity_id=str(shift.id),
+            detail={"business_date": business_date.isoformat(), "template_id": str(template.id)},
+        )
+        session.commit()
+        session.refresh(shift)
+        return _session_public(session, shift)
+    if shift is None:
+        from attendance.routes import SessionCreate
+
+        return open_session(
+            session,
+            user,
+            SessionCreate(template_id=str(template.id), business_date=business_date.isoformat()),
+        )
+    if shift.status == "cancelled":
+        shift.status = "open"
+        shift.updated_at = utcnow()
+        session.add(shift)
+        write_audit(
+            session,
+            actor_id=user.id,
+            action="session_enabled",
+            entity="shift_session",
+            entity_id=str(shift.id),
+            detail={"business_date": business_date.isoformat(), "template_id": str(template.id)},
+        )
+        session.commit()
+        session.refresh(shift)
+    return _session_public(session, shift)
 
 
 def list_sessions(session: Session, user: User, business_date: date | None) -> list[dict]:
@@ -47,6 +178,8 @@ def open_session(session: Session, user: User, payload) -> dict:
         )
     ).first()
     if found is not None:
+        if found.status == "cancelled":
+            raise AppError("SESSION_CANCELLED", "هذه الوردية معطّلة لهذا اليوم. فعّلها من جدول التفعيل.", 409)
         return _session_public(session, found)
     station = session.get(Station, user.station_id)
     tz = station_timezone(station.timezone if station else "Africa/Tripoli")
@@ -77,12 +210,23 @@ def open_session(session: Session, user: User, payload) -> dict:
     return _session_public(session, row)
 
 
-def list_attendance(session: Session, user: User, session_id: uuid.UUID) -> list[dict]:
+def list_attendance(
+    session: Session,
+    user: User,
+    session_id: uuid.UUID,
+    page: int | None = None,
+    page_size: int | None = None,
+) -> dict:
+    from core.pagination import page_bounds, slice_page
+
     shift = _shift(session, user, session_id)
     rows = session.exec(
         select(Attendance).where(Attendance.session_id == shift.id).order_by(Attendance.created_at)
     ).all()
-    return [_attendance_public(session, row, shift) for row in rows]
+    items = [_attendance_public(session, row, shift) for row in rows]
+    safe_page, safe_size = page_bounds(page, page_size, default_size=10)
+    sliced, total = slice_page(items, safe_page, safe_size)
+    return {"items": sliced, "total": total, "page": safe_page, "page_size": safe_size}
 
 
 def register_attendance(session: Session, actor: User, session_id: uuid.UUID, payload) -> dict:
@@ -181,7 +325,7 @@ def update_attendance(session: Session, actor: User, attendance_id: uuid.UUID, p
 
 
 def attendance_csv(session: Session, user: User, session_id: uuid.UUID) -> str:
-    rows = list_attendance(session, user, session_id)
+    rows = list_attendance(session, user, session_id, page=1, page_size=10_000)["items"]
     buffer = io.StringIO()
     writer = csv.writer(buffer)
     writer.writerow(
@@ -314,7 +458,76 @@ def _attendance_public(session: Session, row: Attendance, shift: ShiftSession) -
         "check_in_label": _local_clock(row.check_in_at, tz),
         "check_out_label": _local_clock(row.check_out_at, tz),
         "assignments": [_assignment_public(session, item) for item in assignments],
+        "duty": _duty_snapshot(session, row.id, tz),
     }
+
+
+def _duty_snapshot(session: Session, attendance_id: uuid.UUID, tz) -> dict | None:
+    duty = session.exec(
+        select(ShiftDuty)
+        .where(ShiftDuty.attendance_id == attendance_id)
+        .order_by(ShiftDuty.opened_at.desc())
+    ).first()
+    if duty is None:
+        return None
+    readings = session.exec(select(ShiftReading).where(ShiftReading.duty_id == duty.id)).all()
+    liters = q_liters(0)
+    for row in readings:
+        if row.liters is not None:
+            liters = q_liters(liters + q_liters(row.liters))
+    line_rows = []
+    for reading in readings:
+        nozzle = session.get(Nozzle, reading.nozzle_id)
+        pump = session.get(Pump, nozzle.pump_id) if nozzle else None
+        tank = session.get(Tank, pump.tank_id) if pump else None
+        product = session.get(FuelProduct, tank.product_id) if tank else None
+        line_rows.append(
+            {
+                "pump_code": pump.code if pump else "",
+                "nozzle_code": nozzle.code if nozzle else "",
+                "opening_meter": format_liters(reading.opening_meter),
+                "closing_meter": format_liters(reading.closing_meter) if reading.closing_meter is not None else None,
+                "liters": format_liters(reading.liters) if reading.liters is not None else None,
+                "line_amount": format_money(reading.line_amount) if reading.line_amount is not None else None,
+                "product_name": product.name_ar if product else "",
+            }
+        )
+    closed = duty.submitted_at or duty.approved_at
+    return {
+        "id": str(duty.id),
+        "status": duty.status,
+        "status_label": _DUTY_STATUS_LABELS.get(duty.status, duty.status),
+        "opened_label": _local_clock(duty.opened_at, tz),
+        "submitted_label": _local_clock(duty.submitted_at, tz),
+        "work_hours_label": _work_hours_label_attendance(duty.opened_at, closed, tz),
+        "liters": format_liters(liters) if duty.status != "open" else None,
+        "expected_cash": format_money(duty.expected_cash) if duty.expected_cash is not None else None,
+        "cash_handed": format_money(duty.cash_handed) if duty.cash_handed is not None else None,
+        "variance_label": variance_label(duty.variance) if duty.variance is not None else None,
+        "lines": line_rows,
+    }
+
+
+def _work_hours_label_attendance(opened, closed, tz) -> str | None:
+    if opened is None:
+        return None
+    start_text = _local_clock(opened, tz)
+    if closed is None:
+        return f"من {start_text}" if start_text else None
+    end_text = _local_clock(closed, tz)
+    if not start_text or not end_text:
+        return None
+    start = as_utc(opened)
+    end = as_utc(closed)
+    if start is None or end is None:
+        return f"{start_text} – {end_text}"
+    delta_seconds = int((end - start).total_seconds())
+    if delta_seconds < 0:
+        return f"{start_text} – {end_text}"
+    hours = delta_seconds // 3600
+    minutes = (delta_seconds % 3600) // 60
+    duration = f"{hours}س {minutes}د" if hours > 0 else f"{minutes}د"
+    return f"{start_text} – {end_text} · {duration}"
 
 
 def _assignment_public(session: Session, row: ShiftAssignment) -> dict:

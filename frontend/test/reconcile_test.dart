@@ -33,6 +33,51 @@ void main() {
     expect(second.variance, '5.00');
   });
 
+  test('validateCloseFields reports the first invalid field', () {
+    const lines = [
+      PreviewLine(opening: '100.000', closing: '50.000', unitPrice: '0.150'),
+      PreviewLine(opening: '200.000', closing: '300.000', unitPrice: '0.150'),
+    ];
+    expect(
+      validateCloseFields(lines: lines, lineLabels: const ['PUMP-01 (بنزين)', 'PUMP-02 (بنزين)'], cash: '15.00'),
+      contains('PUMP-01'),
+    );
+    expect(
+      validateCloseFields(
+        lines: const [PreviewLine(opening: '100.000', closing: '200.000', unitPrice: '0.150')],
+        lineLabels: const ['PUMP-01 (بنزين)'],
+        cash: '',
+      ),
+      contains('المبلغ النقدي'),
+    );
+    expect(
+      validateCloseFields(
+        lines: const [PreviewLine(opening: '100.000', closing: 'abc', unitPrice: '0.150')],
+        lineLabels: const ['PUMP-01 (بنزين)'],
+        cash: '10.00',
+      ),
+      contains('غير صالحة'),
+    );
+    expect(
+      validateCloseFields(
+        lines: const [PreviewLine(opening: '100.000', closing: '200.000', unitPrice: '0.150')],
+        lineLabels: const ['PUMP-01 (بنزين)'],
+        cash: '15.00',
+      ),
+      isNull,
+    );
+  });
+
+  test('accepts eastern arabic numerals in cash and meters', () {
+    final preview = previewDuty(
+      lines: const [PreviewLine(opening: '١٠٠.٠٠٠', closing: '٢٠٠.٠٠٠', unitPrice: '0.150')],
+      cash: '١٥.٠٠',
+    );
+    expect(preview, isNotNull);
+    expect(preview!.expectedCash, '15.00');
+    expect(preview.kind, 'match');
+  });
+
   test('mixed prices stay on their own lines', () {
     final preview = previewDuty(
       lines: const [

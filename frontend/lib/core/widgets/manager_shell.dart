@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:frontend/core/theming/app_colors.dart';
 import 'package:frontend/features/auth/logic/cubit/session_cubit.dart';
-import 'package:frontend/features/dashboard/data/models/dashboard_models.dart';
 import 'package:frontend/features/dashboard/logic/cubit/notification_cubit.dart';
-import 'package:frontend/core/widgets/app_dialog.dart';
+import 'package:frontend/core/widgets/notification_bell.dart';
+import 'package:frontend/core/widgets/stored_image.dart';
 import 'package:go_router/go_router.dart';
 
 class ManagerShell extends StatelessWidget {
@@ -21,19 +21,16 @@ class ManagerShell extends StatelessWidget {
     final assets = location.startsWith('/manager/assets');
     final supply = location.startsWith('/manager/supply');
     final attendance = location.startsWith('/manager/attendance');
-    final shifts = location.startsWith('/manager/shifts');
     final settings = location.startsWith('/manager/settings');
     final title = assets
         ? 'إدارة الخزانات والمضخات'
         : supply
             ? 'إدارة التوريدات والموردين'
             : attendance
-                ? 'سجل الحضور والدوام'
-                : shifts
-                    ? 'سجل كافة الورديات'
-                    : settings
-                        ? 'إعدادات النظام'
-                        : 'لوحة التحكم';
+                ? 'الحضور والورديات'
+                : settings
+                    ? 'إعدادات النظام'
+                    : 'لوحة التحكم';
     return Scaffold(
       backgroundColor: AppColors.background,
       body: Row(
@@ -42,52 +39,25 @@ class ManagerShell extends StatelessWidget {
             assetsSelected: assets,
             supplySelected: supply,
             attendanceSelected: attendance,
-            shiftsSelected: shifts,
             settingsSelected: settings,
           ),
           Expanded(
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 _TopBar(
                   title: title,
                   name: user?.fullName ?? '',
                   role: user?.roleNameAr ?? '',
                   initials: user?.initials ?? '',
+                  photoUrl: user?.photoUrl,
                   notifications: notifications,
                 ),
-                Expanded(child: child ?? const ManagerHome()),
+                Expanded(child: child ?? const SizedBox.shrink()),
               ],
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class ManagerHome extends StatelessWidget {
-  const ManagerHome({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.all(32),
-      child: Align(
-        alignment: Alignment.topRight,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'نظرة عامة على العمليات',
-              style: TextStyle(fontSize: 28, fontWeight: FontWeight.w600, color: AppColors.primary),
-            ),
-            SizedBox(height: 8),
-            Text(
-              'مرحباً بك مجدداً، مدير المحطة. إليك ملخص أداء اليوم.',
-              style: TextStyle(color: AppColors.onSurfaceVariant, fontSize: 16),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -98,14 +68,12 @@ class _Sidebar extends StatelessWidget {
     required this.assetsSelected,
     required this.supplySelected,
     required this.attendanceSelected,
-    required this.shiftsSelected,
     required this.settingsSelected,
   });
 
   final bool assetsSelected;
   final bool supplySelected;
   final bool attendanceSelected;
-  final bool shiftsSelected;
   final bool settingsSelected;
 
   @override
@@ -134,7 +102,7 @@ class _Sidebar extends StatelessWidget {
                 _NavButton(
                   icon: Icons.dashboard,
                   label: 'لوحة القيادة',
-                  selected: !assetsSelected && !supplySelected && !attendanceSelected && !shiftsSelected && !settingsSelected,
+                  selected: !assetsSelected && !supplySelected && !attendanceSelected && !settingsSelected,
                   onTap: () => GoRouter.maybeOf(context)?.go('/manager'),
                 ),
                 _NavButton(
@@ -151,15 +119,9 @@ class _Sidebar extends StatelessWidget {
                 ),
                 _NavButton(
             icon: Icons.fact_check_outlined,
-            label: 'سجل الحضور والدوام',
+            label: 'الحضور والورديات',
             selected: attendanceSelected,
             onTap: () => GoRouter.maybeOf(context)?.go('/manager/attendance'),
-          ),
-          _NavButton(
-            icon: Icons.receipt_long,
-            label: 'سجل كافة الورديات',
-            selected: shiftsSelected,
-            onTap: () => GoRouter.maybeOf(context)?.go('/manager/shifts'),
           ),
                 _NavButton(
                   icon: Icons.settings,
@@ -188,83 +150,6 @@ class _Sidebar extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-class _Bell extends StatefulWidget {
-  const _Bell({required this.cubit});
-
-  final NotificationCubit? cubit;
-
-  @override
-  State<_Bell> createState() => _BellState();
-}
-
-class _BellState extends State<_Bell> {
-  @override
-  void initState() {
-    super.initState();
-    widget.cubit?.load();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final cubit = widget.cubit;
-    if (cubit == null) {
-      return IconButton(
-        onPressed: () => _open(context, const []),
-        icon: const Icon(Icons.notifications_none),
-      );
-    }
-    return BlocProvider.value(
-      value: cubit,
-      child: BlocBuilder<NotificationCubit, NotificationState>(
-        builder: (context, state) {
-          return IconButton(
-            onPressed: () async {
-              await _open(context, state.items);
-              for (final item in state.items.where((item) => item.unread)) {
-                await cubit.markRead(item.id);
-              }
-            },
-            icon: Badge(
-              isLabelVisible: state.unread > 0,
-              child: const Icon(Icons.notifications_none),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  Future<void> _open(BuildContext context, List<StationNotice> items) {
-    return showAppDialog<void>(
-      context: context,
-      title: 'التنبيهات',
-      icon: Icons.notifications_outlined,
-      width: 520,
-      content: items.isEmpty
-          ? const Text('لا توجد تنبيهات')
-          : Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                for (final item in items)
-                  Container(
-                    width: double.infinity,
-                    margin: const EdgeInsets.only(bottom: 10),
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF8FAFC),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppColors.outlineVariant),
-                    ),
-                    child: Text('${item.title}\n${item.body}'),
-                  ),
-              ],
-            ),
-      actions: [FilledButton(onPressed: () => Navigator.of(context).pop(), child: const Text('إغلاق'))],
     );
   }
 }
@@ -322,6 +207,7 @@ class _TopBar extends StatelessWidget {
     required this.name,
     required this.role,
     required this.initials,
+    required this.photoUrl,
     required this.notifications,
   });
 
@@ -329,58 +215,80 @@ class _TopBar extends StatelessWidget {
   final String name;
   final String role;
   final String initials;
+  final String? photoUrl;
   final NotificationCubit? notifications;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       height: 64,
+      width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 24),
       decoration: const BoxDecoration(
         color: Colors.white,
         border: Border(bottom: BorderSide(color: AppColors.outlineVariant)),
       ),
-      child: Directionality(
-        textDirection: TextDirection.ltr,
-        child: Row(
-          children: [
-            CircleAvatar(
-              backgroundColor: AppColors.primaryContainer,
-              child: Text(initials, style: const TextStyle(color: Colors.white, fontSize: 12)),
-            ),
-            const SizedBox(width: 12),
-            Flexible(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
-                  ),
-                  Text(
-                    role,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 12, color: AppColors.onSurfaceVariant),
-                  ),
-                ],
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Align(
+            alignment: Alignment.centerRight,
+            child: Padding(
+              padding: const EdgeInsets.only(left: 280),
+              child: Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.right,
+                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
               ),
             ),
-            const SizedBox(width: 4),
-            _Bell(cubit: notifications),
-            const Spacer(),
-            Text(
-              title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.right,
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+          ),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              textDirection: TextDirection.ltr,
+              children: [
+                if (notifications != null) NotificationBell(cubit: notifications!),
+                const SizedBox(width: 12),
+                CircleAvatar(
+                  backgroundColor: AppColors.primaryContainer,
+                  backgroundImage: mediaUrl(photoUrl) == null ? null : NetworkImage(mediaUrl(photoUrl)!),
+                  child: mediaUrl(photoUrl) == null
+                      ? Text(initials, style: const TextStyle(color: Colors.white, fontSize: 12))
+                      : null,
+                ),
+                const SizedBox(width: 10),
+                Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 180),
+                      child: Text(
+                        name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                      ),
+                    ),
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 180),
+                      child: Text(
+                        role,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 12, color: AppColors.onSurfaceVariant),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

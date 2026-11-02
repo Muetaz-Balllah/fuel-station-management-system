@@ -108,9 +108,9 @@ def seed(session: Session, settings) -> None:
     )
     _ensure_catalog(session, station, settings.seed_admin_username)
     if settings.seed_demo_assets:
-        from assets.seed import seed_demo_assets
+        from assets.seed import seed_initial_assets
 
-        seed_demo_assets(session, station, settings.seed_manager_username)
+        seed_initial_assets(session, station, settings.seed_manager_username)
     from supply.seed import seed_suppliers
 
     seed_suppliers(session, station)

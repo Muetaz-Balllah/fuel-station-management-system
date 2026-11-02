@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:frontend/core/networking/api_client.dart';
+import 'package:frontend/core/networking/upload_file.dart';
 import 'package:frontend/features/auth/data/apis/auth_api.dart';
 import 'package:frontend/features/auth/data/models/auth_user.dart';
 import 'package:frontend/features/auth/data/repos/token_store.dart';
@@ -19,6 +20,8 @@ abstract class AuthGateway {
     required String currentPassword,
     required String newPassword,
   });
+
+  Future<AuthUser> uploadPhoto({required List<int> bytes, required String filename});
 }
 
 class AuthRepository implements AuthGateway {
@@ -91,6 +94,14 @@ class AuthRepository implements AuthGateway {
         currentPassword: currentPassword,
         newPassword: newPassword,
       );
+    });
+  }
+
+  @override
+  Future<AuthUser> uploadPhoto({required List<int> bytes, required String filename}) {
+    return _guard(() async {
+      final response = await _api.uploadPhoto(bytes: bytes, filename: filename);
+      return response;
     });
   }
 

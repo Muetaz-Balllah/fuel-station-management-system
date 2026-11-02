@@ -36,6 +36,14 @@ A separate command adds one approved 10-liter sale for today, so the dashboard i
 python -m scripts.seed_demo_day
 ```
 
+For richer local data (supply orders + past approved shifts):
+
+```text
+python -m scripts.seed_realistic
+```
+
+Hosting: see [DEPLOYMENT.md](../DEPLOYMENT.md).
+
 Docs: http://127.0.0.1:8000/docs
 
 Tests use an in-memory database and an in-memory Redis, so they do not need Docker:

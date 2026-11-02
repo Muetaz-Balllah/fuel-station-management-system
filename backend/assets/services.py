@@ -14,6 +14,7 @@ from assets.levels import (
     station_timezone,
 )
 from assets.models import InventoryMovement, Nozzle, Pump, Tank
+from shifts.models import ShiftDuty, ShiftReading
 from errors import AppError
 from stations.models import FuelProduct, Station
 from users.audit import write_audit
@@ -166,10 +167,18 @@ def list_pumps(session: Session, user: User) -> list[dict]:
 
 
 def create_pump(session: Session, user: User, payload) -> dict:
+    from sqlalchemy.exc import IntegrityError
+
     code = payload.code.strip().upper()
     if not code:
         raise AppError("VALIDATION_ERROR", "رمز المضخة مطلوب.", 422)
-    tank = _tank(session, user, uuid.UUID(payload.tank_id))
+    try:
+        tank_uuid = uuid.UUID((payload.tank_id or "").strip())
+    except ValueError as exc:
+        raise AppError("VALIDATION_ERROR", "معرّف الخزان غير صالح.", 422) from exc
+    tank = _tank(session, user, tank_uuid)
+    if not tank.is_active:
+        raise AppError("VALIDATION_ERROR", "لا يمكن ربط مضخة بخزان متوقف.", 422)
     taken = session.exec(select(Pump).where(Pump.tank_id == tank.id)).first()
     if taken is not None:
         raise AppError(
@@ -199,7 +208,15 @@ def create_pump(session: Session, user: User, payload) -> dict:
         entity_id=str(pump.id),
         detail={"code": code, "tank_id": str(tank.id)},
     )
-    session.commit()
+    try:
+        session.commit()
+    except IntegrityError as exc:
+        session.rollback()
+        raise AppError(
+            "TANK_ALREADY_LINKED",
+            "هذا الخزان مرتبط بمضخة أخرى. كل مضخة لها خزان مستقل.",
+            409,
+        ) from exc
     session.refresh(pump)
     return _pump_public(session, pump)
 
@@ -320,8 +337,101 @@ def board(session: Session, user: User) -> dict:
         "products": [{"id": str(item.id), "code": item.code, "name_ar": item.name_ar} for item in products],
         "cards": cards,
         "free_tanks": free,
-        "demo": any(pump.is_demo for pump in pumps),
     }
+
+
+def delete_nozzle(session: Session, user: User, nozzle_id: uuid.UUID) -> None:
+    nozzle = session.get(Nozzle, nozzle_id)
+    if nozzle is None or nozzle.station_id != user.station_id:
+        raise AppError("NOZZLE_NOT_FOUND", "تعذر العثور على المسدس.", 404)
+    _nozzle_must_be_free(session, nozzle.id)
+    session.delete(nozzle)
+    write_audit(
+        session,
+        actor_id=user.id,
+        action="nozzle_deleted",
+        entity="nozzle",
+        entity_id=str(nozzle.id),
+        detail={"pump_id": str(nozzle.pump_id), "code": nozzle.code},
+    )
+    session.commit()
+
+
+def delete_pump(session: Session, user: User, pump_id: uuid.UUID) -> None:
+    pump = session.get(Pump, pump_id)
+    if pump is None or pump.station_id != user.station_id:
+        raise AppError("PUMP_NOT_FOUND", "تعذر العثور على المضخة.", 404)
+    nozzles = session.exec(select(Nozzle).where(Nozzle.pump_id == pump.id)).all()
+    for nozzle in nozzles:
+        _nozzle_must_be_free(session, nozzle.id)
+        session.delete(nozzle)
+    session.delete(pump)
+    write_audit(
+        session,
+        actor_id=user.id,
+        action="pump_deleted",
+        entity="pump",
+        entity_id=str(pump.id),
+        detail={"code": pump.code, "tank_id": str(pump.tank_id)},
+    )
+    session.commit()
+
+
+def delete_tank(session: Session, user: User, tank_id: uuid.UUID) -> None:
+    from supply.models import SupplyOrder
+
+    tank = session.get(Tank, tank_id)
+    if tank is None or tank.station_id != user.station_id:
+        raise AppError("TANK_NOT_FOUND", "تعذر العثور على الخزان.", 404)
+    linked = session.exec(select(Pump).where(Pump.tank_id == tank.id)).first()
+    if linked is not None:
+        raise AppError(
+            "TANK_ALREADY_LINKED",
+            "لا يمكن حذف خزان مرتبط بمضخة. احذف المضخة أولاً، ثم احذف الخزان من قائمة «خزانات غير مرتبطة».",
+            409,
+        )
+    pending_order = session.exec(
+        select(SupplyOrder).where(
+            SupplyOrder.tank_id == tank.id,
+            SupplyOrder.status == "pending",
+        )
+    ).first()
+    if pending_order is not None:
+        raise AppError(
+            "TANK_ORDER_PENDING",
+            "لا يمكن حذف خزان له طلب توريد قيد الانتظار.",
+            409,
+        )
+    movements = session.exec(select(InventoryMovement).where(InventoryMovement.tank_id == tank.id)).all()
+    for row in movements:
+        session.delete(row)
+    session.delete(tank)
+    write_audit(
+        session,
+        actor_id=user.id,
+        action="tank_deleted",
+        entity="tank",
+        entity_id=str(tank.id),
+        detail={"code": tank.code},
+    )
+    session.commit()
+
+
+def _nozzle_must_be_free(session: Session, nozzle_id: uuid.UUID) -> None:
+    duties = session.exec(
+        select(ShiftDuty).where(ShiftDuty.status.in_(["open", "pending_approval"]))  # type: ignore[attr-defined]
+    ).all()
+    busy_ids = [duty.id for duty in duties]
+    if not busy_ids:
+        return
+    held = session.exec(
+        select(ShiftReading).where(
+            ShiftReading.nozzle_id == nozzle_id,
+            ShiftReading.duty_id.in_(busy_ids),  # type: ignore[attr-defined]
+        )
+    ).first()
+    if held is not None:
+        raise AppError("NOZZLE_BUSY", "هذا المسدس مرتبط بوردية لم تُعتمد بعد.", 409)
 
 
 def list_events(
@@ -417,7 +527,6 @@ def _tank_body(session, tank: Tank, product: FuelProduct | None, tz, now: dateti
         "critical_percent": tank.critical_percent,
         "warning_percent": tank.warning_percent,
         "is_active": tank.is_active,
-        "is_demo": tank.is_demo,
         "last_receipt_at": _iso(_last_receipt(session, tank.id)),
         "last_receipt_label": receipt_label(_last_receipt(session, tank.id), now, tz),
         "today_liters": format_qty(_today_draw(session, tank.id, now, tz)),
@@ -435,7 +544,6 @@ def _pump_public(session, pump: Pump) -> dict:
         "status_label": PUMP_LABELS.get(pump.status, pump.status),
         "tank_id": str(pump.tank_id),
         "tank_code": tank.code if tank else "",
-        "is_demo": pump.is_demo,
         "nozzle_count": len(count),
     }
 
@@ -557,10 +665,11 @@ def _product(session: Session, user: User, product_id: str) -> FuelProduct:
 
 def _next_tank_code(session: Session, station_id: uuid.UUID, product_code: str) -> str:
     prefix = "TD" if product_code == "DIESEL" else "T"
-    rows = session.exec(select(Tank.code).where(Tank.station_id == station_id)).all()
+    rows = session.exec(select(Tank).where(Tank.station_id == station_id)).all()
     numbers = []
-    for code in rows:
-        if isinstance(code, str) and code.startswith(prefix + "-"):
+    for tank in rows:
+        code = tank.code
+        if code.startswith(prefix + "-"):
             try:
                 numbers.append(int(code.split("-", 1)[1]))
             except ValueError:

@@ -19,6 +19,7 @@ class ShiftDuty(SQLModel, table=True):
     session_id: uuid.UUID = Field(foreign_key="shift_sessions.id", index=True)
     user_id: uuid.UUID = Field(foreign_key="users.id", index=True)
     attendance_id: uuid.UUID = Field(foreign_key="attendances.id", index=True)
+    rostered_user_id: uuid.UUID | None = Field(default=None, foreign_key="users.id")
     status: str = Field(default="open", max_length=32)
     opened_at: datetime = Field(default_factory=utcnow)
     submitted_at: datetime | None = None

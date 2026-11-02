@@ -19,6 +19,7 @@ class Supplier(SQLModel, table=True):
     contact_name: str = Field(default="", max_length=200)
     phone: str = Field(default="", max_length=40)
     max_daily_liters: Decimal = Field(sa_column=Column(Numeric(14, 3), nullable=False))
+    logo_url: str | None = Field(default=None, max_length=300)
     is_active: bool = True
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)

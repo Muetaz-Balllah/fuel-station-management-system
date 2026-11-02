@@ -20,7 +20,6 @@ def test_board_matches_the_demo_cards(client):
     board = client.get("/api/v1/assets/board", headers=auth_header(token))
     assert board.status_code == 200, board.text
     body = board.json()
-    assert body["demo"] is True
     by_code = {card["pump"]["code"]: card for card in body["cards"]}
     gasoline = by_code["PUMP-01"]
     assert gasoline["tank"]["code"] == "T-01"
@@ -36,6 +35,28 @@ def test_board_matches_the_demo_cards(client):
     assert diesel["tank"]["percent"] == 22
     assert diesel["tank"]["card_band_label"] == "يحتاج صيانة"
     assert len(diesel["nozzles"]) == 2
+
+
+def test_create_pump_on_free_tank(client):
+    token = _manager(client)
+    products = client.get("/api/v1/assets/board", headers=auth_header(token)).json()["products"]
+    gasoline = next(item for item in products if item["code"] == "G95")
+    tank_resp = client.post(
+        "/api/v1/tanks",
+        headers=auth_header(token),
+        json={"name": "خزان للمضخة", "product_id": gasoline["id"], "capacity_liters": "8000"},
+    )
+    assert tank_resp.status_code == 201, tank_resp.text
+    tank_id = tank_resp.json()["id"]
+    created = client.post(
+        "/api/v1/pumps",
+        headers=auth_header(token),
+        json={"code": "PUMP-NEW", "tank_id": tank_id},
+    )
+    assert created.status_code == 201, created.text
+    body = created.json()
+    assert body["code"] == "PUMP-NEW"
+    assert body["tank_id"] == tank_id
 
 
 def test_two_pumps_cannot_share_a_tank(client):

@@ -67,82 +67,15 @@ class DashboardCubit extends Cubit<DashboardState> {
 
   final DashboardRepository _repository;
 
-  void showDesignPreview() {
-    emit(
-      const DashboardState(
-        loaded: true,
-        date: '2024-05-24',
-        revenue: '18450.00',
-        liters: '12300.000',
-        inventoryLiters: '128400.000',
-        staffOnDuty: 12,
-        alert: DashboardAlert(
-          tankName: 'خزان بنزين 95',
-          productName: 'بنزين 95',
-          percent: 15,
-          message: 'المستوى حرج: أقل من 15%',
-        ),
-        week: [
-          DashboardWeekDay(date: '2024-05-19', label: 'الأحد', morning: '12000.00', evening: '8000.00'),
-          DashboardWeekDay(date: '2024-05-20', label: 'الاثنين', morning: '15000.00', evening: '9000.00'),
-          DashboardWeekDay(date: '2024-05-21', label: 'الثلاثاء', morning: '9000.00', evening: '6000.00'),
-          DashboardWeekDay(date: '2024-05-22', label: 'الأربعاء', morning: '18000.00', evening: '11000.00'),
-          DashboardWeekDay(date: '2024-05-23', label: 'الخميس', morning: '16000.00', evening: '10000.00'),
-          DashboardWeekDay(date: '2024-05-24', label: 'الجمعة', morning: '11000.00', evening: '7000.00'),
-          DashboardWeekDay(date: '2024-05-25', label: 'السبت', morning: '14000.00', evening: '8500.00'),
-        ],
-        tanks: [
-          DashboardTank(name: 'الخزان 1', productName: 'بنزين 95', percent: 15, currentLiters: '12500.000', capacityLiters: '80000.000'),
-          DashboardTank(name: 'الخزان 2', productName: 'ديزل', percent: 67, currentLiters: '54000.000', capacityLiters: '80000.000'),
-          DashboardTank(name: 'الخزان 3', productName: 'بنزين 98', percent: 84, currentLiters: '42000.000', capacityLiters: '50000.000'),
-          DashboardTank(name: 'الخزان 4', productName: 'ديزل شاحنات', percent: 20, currentLiters: '19900.000', capacityLiters: '100000.000'),
-        ],
-        sessions: [
-          ShiftLogRow(
-            id: 'preview-104',
-            code: 'SH-2024-104',
-            businessDate: '2024-05-24',
-            window: 'الوردية 1 (08:00 - 16:00)',
-            supervisor: 'أحمد الترهوني',
-            statusLabel: 'جارية الآن',
-            liters: '12300.000',
-            revenue: '18450.00',
-            varianceLabel: '0.00 د.ل (مطابق)',
-          ),
-          ShiftLogRow(
-            id: 'preview-103',
-            code: 'SH-2024-103',
-            businessDate: '2024-05-23',
-            window: 'الوردية 2 (16:00 - 00:00)',
-            supervisor: 'سالم الشريف',
-            statusLabel: 'معتمدة ومغلقة',
-            liters: '15420.000',
-            revenue: '23130.00',
-            varianceLabel: '+15.00 د.ل (فائض)',
-          ),
-          ShiftLogRow(
-            id: 'preview-102',
-            code: 'SH-2024-102',
-            businessDate: '2024-05-23',
-            window: 'الوردية 1 (08:00 - 16:00)',
-            supervisor: 'طارق الورفلي',
-            statusLabel: 'معتمدة ومغلقة',
-            liters: '11800.000',
-            revenue: '17700.00',
-            varianceLabel: '-25.00 د.ل (عجز)',
-          ),
-        ],
-      ),
-    );
-  }
-
   Future<void> load({String? date}) async {
     emit(state.copyWith(clearError: true));
     try {
       final snapshot = await _repository.fetch(date: date ?? (state.date.isEmpty ? null : state.date));
       emit(_from(snapshot));
     } on ApiException catch (error) {
-      emit(state.copyWith(loaded: false, error: error.message));
+      emit(state.copyWith(loaded: true, error: error.message));
+    } catch (_) {
+      emit(state.copyWith(loaded: true, error: 'تعذر تحميل لوحة التحكم. حاول مرة أخرى.'));
     }
   }
 

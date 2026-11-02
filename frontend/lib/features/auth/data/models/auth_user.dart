@@ -14,6 +14,7 @@ class AuthUser {
     required this.permissions,
     required this.isMaintenance,
     required this.isActive,
+    this.photoUrl,
   });
 
   final String id;
@@ -30,6 +31,7 @@ class AuthUser {
   final List<String> permissions;
   final bool isMaintenance;
   final bool isActive;
+  final String? photoUrl;
 
   bool get isOperator => roleCode == 'operator';
 
@@ -70,6 +72,7 @@ class AuthUser {
           : const [],
       isMaintenance: json['is_maintenance'] as bool? ?? false,
       isActive: json['is_active'] as bool? ?? true,
+      photoUrl: json['photo_url'] as String?,
     );
   }
 }

@@ -49,6 +49,7 @@ class StaffMember {
     required this.isActive,
     required this.isMaintenance,
     required this.lastLoginAt,
+    this.photoUrl,
   });
 
   final String id;
@@ -62,6 +63,7 @@ class StaffMember {
   final bool isActive;
   final bool isMaintenance;
   final String? lastLoginAt;
+  final String? photoUrl;
 
   factory StaffMember.fromJson(Map<String, dynamic> json) {
     return StaffMember(
@@ -76,6 +78,7 @@ class StaffMember {
       isActive: json['is_active'] as bool? ?? true,
       isMaintenance: json['is_maintenance'] as bool? ?? false,
       lastLoginAt: json['last_login_at']?.toString(),
+      photoUrl: json['photo_url'] as String?,
     );
   }
 }

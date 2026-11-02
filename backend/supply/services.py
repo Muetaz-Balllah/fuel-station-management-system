@@ -116,10 +116,20 @@ def summary(session: Session, user: User) -> dict:
     }
 
 
-def list_orders(session: Session, user: User) -> list[dict]:
+def list_orders(
+    session: Session,
+    user: User,
+    page: int | None = None,
+    page_size: int | None = None,
+) -> dict:
+    from core.pagination import page_bounds, slice_page
+
     rows = _orders(session, user.station_id)
     rows.sort(key=lambda item: as_utc(item.created_at) or utcnow(), reverse=True)
-    return [_order_public(session, row) for row in rows]
+    items = [_order_public(session, row) for row in rows]
+    safe_page, safe_size = page_bounds(page, page_size, default_size=20, max_size=100)
+    sliced, total = slice_page(items, safe_page, safe_size)
+    return {"items": sliced, "total": total, "page": safe_page, "page_size": safe_size}
 
 
 def create_order(session: Session, user: User, payload) -> dict:
@@ -258,6 +268,18 @@ def _week(orders: list[SupplyOrder], today, tz) -> list[dict]:
     return days
 
 
+def save_supplier_logo(session: Session, user: User, supplier_id: str, upload) -> dict:
+    from stations.services import store_image
+
+    row = _supplier(session, user, supplier_id)
+    row.logo_url = store_image(upload, f"supplier-{row.id}")
+    row.updated_at = utcnow()
+    session.add(row)
+    session.commit()
+    session.refresh(row)
+    return _supplier_public(session, row, recent=True)
+
+
 def _supplier_public(session: Session, row: Supplier, *, recent: bool) -> dict:
     body = {
         "id": str(row.id),
@@ -267,6 +289,7 @@ def _supplier_public(session: Session, row: Supplier, *, recent: bool) -> dict:
         "phone": row.phone,
         "max_daily_liters": format_qty(row.max_daily_liters),
         "is_active": row.is_active,
+        "logo_url": row.logo_url,
         "reliability": _reliability(session, row),
     }
     if recent:

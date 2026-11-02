@@ -1,17 +1,18 @@
+import 'dart:typed_data';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:frontend/core/di/injection.dart';
-import 'package:frontend/core/networking/api_config.dart';
+import 'package:frontend/core/widgets/stored_image.dart';
 import 'package:frontend/core/theming/app_colors.dart';
+import 'package:frontend/features/auth/data/repos/auth_repository.dart';
 import 'package:frontend/features/auth/logic/cubit/session_cubit.dart';
 import 'package:frontend/features/auth/ui/widgets/change_password_dialog.dart';
 import 'package:frontend/features/settings/data/models/settings_models.dart';
-import 'package:frontend/features/settings/data/shift_roster.dart';
 import 'package:frontend/features/settings/data/repos/settings_repository.dart';
 import 'package:frontend/features/settings/logic/cubit/settings_cubit.dart';
 import 'package:frontend/features/settings/ui/widgets/license_banner.dart';
-import 'package:frontend/features/settings/ui/widgets/shift_template_form.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key, this.cubit});
@@ -39,7 +40,7 @@ class SettingsView extends StatelessWidget {
     return ColoredBox(
       color: AppColors.background,
       child: DefaultTabController(
-        length: 4,
+        length: 3,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -63,7 +64,6 @@ class SettingsView extends StatelessWidget {
                 Tab(key: Key('tab-station'), text: 'إعدادات المحطة'),
                 Tab(key: Key('tab-users'), text: 'إدارة المستخدمين'),
                 Tab(key: Key('tab-account'), text: 'حسابي'),
-                Tab(key: Key('tab-shifts'), text: 'إعدادات الورديات ومواعيد المناوبات'),
               ],
             ),
             Expanded(
@@ -72,7 +72,6 @@ class SettingsView extends StatelessWidget {
                   _StationTab(state: state),
                   _UsersTab(state: state),
                   const _AccountTab(),
-                  _ShiftsTab(state: state),
                 ],
               ),
             ),
@@ -127,6 +126,7 @@ class _StationFormState extends State<_StationForm> {
   late final TextEditingController _expires;
   late final TextEditingController _latitude;
   late final TextEditingController _longitude;
+  Uint8List? _logoBytes;
 
   @override
   void initState() {
@@ -147,6 +147,9 @@ class _StationFormState extends State<_StationForm> {
         oldWidget.station.name != widget.station.name ||
         oldWidget.station.logoUrl != widget.station.logoUrl) {
       _fill(widget.station);
+      if (oldWidget.station.logoUrl != widget.station.logoUrl) {
+        _logoBytes = null;
+      }
     }
   }
 
@@ -169,16 +172,20 @@ class _StationFormState extends State<_StationForm> {
   }
 
   Future<void> _pickLogo() async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: const ['png', 'jpg', 'jpeg', 'webp'],
-    );
+    final result = await FilePicker.platform.pickFiles(type: FileType.image, withData: true);
     final file = result?.files.single;
-    final path = file?.path;
-    if (path == null || !mounted) {
+    final bytes = file?.bytes;
+    if (bytes == null || !mounted) {
       return;
     }
-    await context.read<SettingsCubit>().uploadLogo(path, file!.name);
+    setState(() => _logoBytes = bytes);
+    final ok = await context.read<SettingsCubit>().uploadLogo(bytes: bytes, filename: file!.name);
+    if (!mounted) {
+      return;
+    }
+    if (ok) {
+      setState(() => _logoBytes = null);
+    }
   }
 
   @override
@@ -198,13 +205,12 @@ class _StationFormState extends State<_StationForm> {
                 border: Border.all(color: AppColors.outlineVariant),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: logo == null
-                  ? const Icon(Icons.local_gas_station, color: AppColors.primary, size: 40)
-                  :                       Image.network(
-                      '$apiBaseUrl$logo',
-                      fit: BoxFit.contain,
-                      errorBuilder: (context, error, stackTrace) => const Icon(Icons.broken_image),
-                    ),
+              child: StoredImage(
+                url: logo,
+                bytes: _logoBytes,
+                fit: BoxFit.contain,
+                placeholder: const Icon(Icons.local_gas_station, color: AppColors.primary, size: 40),
+              ),
             ),
             const SizedBox(width: 16),
             OutlinedButton.icon(
@@ -407,6 +413,19 @@ class _UsersTabState extends State<_UsersTab> {
                     return Opacity(
                       opacity: user.isActive ? 1 : 0.45,
                       child: ListTile(
+                        leading: ClipOval(
+                          child: SizedBox(
+                            width: 40,
+                            height: 40,
+                            child: StoredImage(
+                              url: user.photoUrl,
+                              placeholder: const ColoredBox(
+                                color: AppColors.primary,
+                                child: Icon(Icons.person, color: Colors.white, size: 20),
+                              ),
+                            ),
+                          ),
+                        ),
                         title: Text('${user.fullName}  •  ${user.employeeCode}'),
                         subtitle: Text(
                           '${user.roleNameAr}${user.isMaintenance ? ' • فني صيانة' : ''} • ${user.email ?? 'بدون بريد'}',
@@ -414,6 +433,10 @@ class _UsersTabState extends State<_UsersTab> {
                         trailing: Wrap(
                           spacing: 8,
                           children: [
+                            TextButton(
+                              onPressed: () => _pickUserPhoto(context, user),
+                              child: const Text('صورة'),
+                            ),
                             TextButton(
                               onPressed: () => _editUser(context, user),
                               child: const Text('تعديل'),
@@ -434,6 +457,34 @@ class _UsersTabState extends State<_UsersTab> {
         ),
       ],
     );
+  }
+
+  Future<void> _pickUserPhoto(BuildContext context, StaffMember user) async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const ['png', 'jpg', 'jpeg', 'webp'],
+      withData: true,
+    );
+    final file = result?.files.single;
+    final bytes = file?.bytes;
+    if (file == null || bytes == null || !context.mounted) {
+      return;
+    }
+    final ok = await context.read<SettingsCubit>().uploadUserPhoto(
+          userId: user.id,
+          bytes: bytes,
+          filename: file.name,
+        );
+    if (!ok || !context.mounted) {
+      return;
+    }
+    final session = context.read<SessionCubit>().state;
+    if (session is SessionSignedIn && session.user.id == user.id) {
+      final refreshed = await getIt<AuthGateway>().restore();
+      if (refreshed != null && context.mounted) {
+        context.read<SessionCubit>().signedIn(refreshed);
+      }
+    }
   }
 
   Future<void> _editUser(BuildContext context, StaffMember? user) async {
@@ -458,9 +509,13 @@ class _UsersTabState extends State<_UsersTab> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       TextField(controller: name, decoration: const InputDecoration(labelText: 'الاسم')),
+                      const SizedBox(height: 12),
                       TextField(controller: username, decoration: const InputDecoration(labelText: 'اسم المستخدم')),
+                      const SizedBox(height: 12),
                       TextField(controller: email, decoration: const InputDecoration(labelText: 'البريد')),
+                      const SizedBox(height: 12),
                       TextField(controller: job, decoration: const InputDecoration(labelText: 'المسمى الوظيفي')),
+                      const SizedBox(height: 12),
                       TextField(
                         controller: password,
                         obscureText: true,
@@ -468,6 +523,7 @@ class _UsersTabState extends State<_UsersTab> {
                           labelText: user == null ? 'كلمة المرور' : 'كلمة مرور جديدة (اختياري)',
                         ),
                       ),
+                      const SizedBox(height: 12),
                       DropdownButton<String>(
                         value: role,
                         isExpanded: true,
@@ -568,208 +624,5 @@ class _AccountTab extends StatelessWidget {
         ),
       ],
     );
-  }
-}
-
-class _ShiftsTab extends StatelessWidget {
-  const _ShiftsTab({required this.state});
-
-  final SettingsState state;
-
-  @override
-  Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.all(24),
-      children: [
-        Row(
-          children: [
-            const Expanded(
-              child: Text(
-                'إعدادات الورديات ومواعيد المناوبات',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
-              ),
-            ),
-            FilledButton.icon(
-              key: const Key('shift-add'),
-              onPressed: () => _openForm(context, null),
-              icon: const Icon(Icons.add),
-              label: const Text('إضافة وردية'),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        if (state.templates.isEmpty) const Text('لا توجد ورديات بعد.'),
-        for (final template in state.templates)
-          _ShiftCard(
-            template: template,
-            employees: state.users.where((user) => user.isActive && user.roleCode == 'operator').toList(),
-            onEdit: () => _openForm(context, template),
-          ),
-      ],
-    );
-  }
-
-  Future<void> _openForm(BuildContext context, ShiftTemplateItem? existing) async {
-    final cubit = context.read<SettingsCubit>();
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: Text(existing == null ? 'إضافة وردية' : 'تعديل الوردية'),
-          content: SizedBox(
-            width: 420,
-            child: ShiftTemplateForm(
-              existing: existing,
-              onSubmit: (draft) async {
-                final ok = await cubit.saveTemplate(draft, id: existing?.id);
-                if (ok && dialogContext.mounted) {
-                  Navigator.pop(dialogContext);
-                }
-              },
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _ShiftCard extends StatelessWidget {
-  const _ShiftCard({required this.template, required this.employees, required this.onEdit});
-
-  final ShiftTemplateItem template;
-  final List<StaffMember> employees;
-  final VoidCallback onEdit;
-
-  @override
-  Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: ShiftRoster.updates,
-      builder: (context, _) {
-        final crew = ShiftRoster.of(template.id)?.employeeNames ?? const <String>[];
-        return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(template.nameAr, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
-                      const SizedBox(height: 4),
-                      Text(
-                        '${template.startsAt} – ${template.endsAt} • مهلة ${template.graceMinutes} د'
-                        '${template.crossesMidnight ? ' • تمتد لليوم التالي' : ''}'
-                        '${template.isActive ? '' : ' • متوقفة'}',
-                      ),
-                    ],
-                  ),
-                ),
-                TextButton(onPressed: onEdit, child: const Text('تعديل')),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              crew.isEmpty ? 'لا يوجد موظفون مرتبطون بهذه الوردية.' : 'الموظفون المكلفون: ${crew.join('، ')}',
-              style: const TextStyle(color: AppColors.onSurfaceVariant),
-            ),
-            const SizedBox(height: 8),
-            OutlinedButton.icon(
-              onPressed: () => _assign(context),
-              icon: const Icon(Icons.group_add_outlined),
-              label: const Text('ربط الموظفين بالوردية'),
-            ),
-          ],
-        ),
-      ),
-        );
-      },
-    );
-  }
-
-  Future<void> _assign(BuildContext context) async {
-    final selected = {...?ShiftRoster.of(template.id)?.employeeNames};
-    final manual = TextEditingController();
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) {
-        return StatefulBuilder(
-          builder: (context, setLocal) {
-            return AlertDialog(
-              title: Text('تكليف موظفين — ${template.nameAr}'),
-              content: SizedBox(
-                width: 420,
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      const Text('اختر مشغلي الوردية الذين سيظهر لهم هذا الموعد في جدولهم.'),
-                      const SizedBox(height: 8),
-                      if (employees.isEmpty)
-                        const Text('لا يوجد مشغلو وردية مسجلون بعد. أضف اسماً يدوياً.')
-                      else
-                        for (final employee in employees)
-                          CheckboxListTile(
-                            contentPadding: EdgeInsets.zero,
-                            title: Text('${employee.fullName} • ${employee.employeeCode}'),
-                            value: selected.contains(employee.fullName),
-                            onChanged: (checked) {
-                              setLocal(() {
-                                if (checked ?? false) {
-                                  selected.add(employee.fullName);
-                                } else {
-                                  selected.remove(employee.fullName);
-                                }
-                              });
-                            },
-                          ),
-                      TextField(
-                        controller: manual,
-                        decoration: const InputDecoration(labelText: 'اسم موظف إضافي'),
-                        onSubmitted: (value) {
-                          final name = value.trim();
-                          if (name.isEmpty) {
-                            return;
-                          }
-                          setLocal(() => selected.add(name));
-                          manual.clear();
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              actions: [
-                TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('إلغاء')),
-                FilledButton(
-                  onPressed: () {
-                    final extra = manual.text.trim();
-                    if (extra.isNotEmpty) {
-                      selected.add(extra);
-                    }
-                    ShiftRoster.save(
-                      ShiftAssignment(
-                        templateId: template.id,
-                        shiftName: template.nameAr,
-                        window: '${template.startsAt} – ${template.endsAt}',
-                        employeeNames: selected.toList(),
-                      ),
-                    );
-                    Navigator.pop(dialogContext);
-                  },
-                  child: const Text('حفظ التكليف'),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-    manual.dispose();
   }
 }

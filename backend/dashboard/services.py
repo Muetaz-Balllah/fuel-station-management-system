@@ -50,7 +50,15 @@ def dashboard(session: Session, user: User, day: str | None) -> dict:
         "alert": _alert(session, tanks),
         "week": _week(session, user, business_date),
         "tanks": [_tank_row(session, tank) for tank in tanks if tank.is_active],
-        "sessions": shift_log(session, user, business_date.isoformat(), business_date.isoformat(), None),
+        "sessions": shift_log(
+            session,
+            user,
+            business_date.isoformat(),
+            business_date.isoformat(),
+            None,
+            page=1,
+            page_size=500,
+        )["items"],
         "license_expires_on": station.license_expires_on.isoformat() if station else None,
         "license_due": bool(station and (station.license_expires_on - utcnow().date()).days <= 30),
     }
@@ -76,8 +84,11 @@ def dashboard_csv(session: Session, user: User, day: str | None) -> str:
     return buffer.getvalue()
 
 
-def notifications(session: Session, user: User) -> list[dict]:
-    return list_notifications(session, user.station_id)
+def notifications(session: Session, user: User, permissions: tuple[str, ...] = ()) -> list[dict]:
+    from enums import PermissionCode
+
+    operator_only = PermissionCode.DASHBOARD_VIEW not in permissions
+    return list_notifications(session, user.station_id, user_id=user.id if operator_only else None)
 
 
 def read_notification(session: Session, user: User, notification_id: str) -> dict:

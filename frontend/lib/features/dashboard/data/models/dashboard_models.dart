@@ -17,7 +17,7 @@ class DashboardAlert {
     return DashboardAlert(
       tankName: json['tank_name'] as String? ?? '',
       productName: json['product_name'] as String? ?? '',
-      percent: json['percent'] as int? ?? 0,
+      percent: _asInt(json['percent']),
       message: json['message'] as String? ?? '',
     );
   }
@@ -65,7 +65,7 @@ class DashboardTank {
     return DashboardTank(
       name: json['name'] as String? ?? '',
       productName: json['product_name'] as String? ?? '',
-      percent: json['percent'] as int? ?? 0,
+      percent: _asInt(json['percent']),
       currentLiters: json['current_liters'] as String? ?? '0.000',
       capacityLiters: json['capacity_liters'] as String? ?? '0.000',
     );
@@ -102,7 +102,15 @@ class DashboardSnapshot {
   factory DashboardSnapshot.fromJson(Map<String, dynamic> json) {
     final week = json['week'] as List<dynamic>? ?? const [];
     final tanks = json['tanks'] as List<dynamic>? ?? const [];
-    final sessions = json['sessions'] as List<dynamic>? ?? const [];
+    final rawSessions = json['sessions'];
+    final List<dynamic> sessions;
+    if (rawSessions is Map<String, dynamic>) {
+      sessions = rawSessions['items'] as List<dynamic>? ?? const [];
+    } else if (rawSessions is List) {
+      sessions = rawSessions;
+    } else {
+      sessions = const [];
+    }
     final alert = json['alert'];
     return DashboardSnapshot(
       date: json['date'] as String? ?? '',
@@ -146,6 +154,16 @@ class StationNotice {
       readAt: json['read_at'] as String?,
     );
   }
+}
+
+int _asInt(Object? value) {
+  if (value is int) {
+    return value;
+  }
+  if (value is num) {
+    return value.round();
+  }
+  return 0;
 }
 
 String dashboardCsv(List<ShiftLogRow> rows) {

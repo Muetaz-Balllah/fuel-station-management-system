@@ -8,6 +8,7 @@ class AssignedNozzle {
     required this.currentMeter,
     required this.unitPrice,
     required this.selectable,
+    this.blockReason,
   });
 
   final String id;
@@ -18,6 +19,7 @@ class AssignedNozzle {
   final String currentMeter;
   final String? unitPrice;
   final bool selectable;
+  final String? blockReason;
 
   factory AssignedNozzle.fromJson(Map<String, dynamic> json) {
     return AssignedNozzle(
@@ -29,6 +31,7 @@ class AssignedNozzle {
       currentMeter: json['current_meter'] as String? ?? '0.000',
       unitPrice: json['unit_price'] as String?,
       selectable: json['selectable'] as bool? ?? false,
+      blockReason: json['block_reason'] as String?,
     );
   }
 }
@@ -83,6 +86,12 @@ class DutyRecord {
     required this.status,
     required this.statusLabel,
     required this.openedAt,
+    this.submittedAt,
+    this.approvedAt,
+    this.openedAtLabel,
+    this.closedAtLabel,
+    this.workHoursLabel,
+    this.templateName,
     required this.liters,
     required this.expectedCash,
     required this.cashHanded,
@@ -93,6 +102,8 @@ class DutyRecord {
     required this.rejectReason,
     required this.businessDate,
     required this.lines,
+    this.rosteredName,
+    this.takenOver = false,
   });
 
   final String id;
@@ -102,6 +113,12 @@ class DutyRecord {
   final String status;
   final String statusLabel;
   final String? openedAt;
+  final String? submittedAt;
+  final String? approvedAt;
+  final String? openedAtLabel;
+  final String? closedAtLabel;
+  final String? workHoursLabel;
+  final String? templateName;
   final String? liters;
   final String? expectedCash;
   final String? cashHanded;
@@ -112,6 +129,8 @@ class DutyRecord {
   final String? rejectReason;
   final String businessDate;
   final List<DutyLine> lines;
+  final String? rosteredName;
+  final bool takenOver;
 
   bool get canClose => status == 'open' || status == 'rejected';
 
@@ -125,6 +144,12 @@ class DutyRecord {
       status: json['status'] as String? ?? '',
       statusLabel: json['status_label'] as String? ?? '',
       openedAt: json['opened_at'] as String?,
+      submittedAt: json['submitted_at'] as String?,
+      approvedAt: json['approved_at'] as String?,
+      openedAtLabel: json['opened_at_label'] as String?,
+      closedAtLabel: json['closed_at_label'] as String?,
+      workHoursLabel: json['work_hours_label'] as String?,
+      templateName: json['template_name'] as String?,
       liters: json['liters'] as String?,
       expectedCash: json['expected_cash'] as String?,
       cashHanded: json['cash_handed'] as String?,
@@ -135,6 +160,8 @@ class DutyRecord {
       rejectReason: json['reject_reason'] as String?,
       businessDate: json['business_date'] as String? ?? '',
       lines: raw.map((item) => DutyLine.fromJson(item as Map<String, dynamic>)).toList(),
+      rosteredName: json['rostered_name'] as String?,
+      takenOver: json['taken_over'] as bool? ?? false,
     );
   }
 }
@@ -150,6 +177,7 @@ class ShiftLogRow {
     required this.liters,
     required this.revenue,
     required this.varianceLabel,
+    this.operators = '',
   });
 
   final String id;
@@ -161,6 +189,7 @@ class ShiftLogRow {
   final String? liters;
   final String? revenue;
   final String? varianceLabel;
+  final String operators;
 
   factory ShiftLogRow.fromJson(Map<String, dynamic> json) {
     return ShiftLogRow(
@@ -173,6 +202,33 @@ class ShiftLogRow {
       liters: json['liters'] as String?,
       revenue: json['revenue'] as String?,
       varianceLabel: json['variance_label'] as String?,
+      operators: json['operators'] as String? ?? '',
+    );
+  }
+}
+
+class ClaimableShift {
+  const ClaimableShift({
+    required this.templateId,
+    required this.templateName,
+    required this.sessionId,
+    required this.window,
+    required this.rosteredName,
+  });
+
+  final String templateId;
+  final String templateName;
+  final String? sessionId;
+  final String window;
+  final String? rosteredName;
+
+  factory ClaimableShift.fromJson(Map<String, dynamic> json) {
+    return ClaimableShift(
+      templateId: json['template_id'] as String? ?? '',
+      templateName: json['template_name'] as String? ?? '',
+      sessionId: json['session_id'] as String?,
+      window: json['window'] as String? ?? '',
+      rosteredName: json['rostered_name'] as String?,
     );
   }
 }

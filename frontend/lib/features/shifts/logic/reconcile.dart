@@ -31,6 +31,58 @@ class PreviewLine {
   final String unitPrice;
 }
 
+/// First validation failure for close submission, with a field-specific Arabic message.
+String? validateCloseFields({
+  required List<PreviewLine> lines,
+  required List<String> lineLabels,
+  required String cash,
+}) {
+  if (lines.length != lineLabels.length) {
+    throw ArgumentError('lineLabels must match lines length.');
+  }
+  if (lines.isEmpty) {
+    return 'لا توجد مسدسات في الوردية.';
+  }
+  for (var index = 0; index < lines.length; index++) {
+    final line = lines[index];
+    final label = lineLabels[index];
+    final closingRaw = line.closing.trim();
+    if (closingRaw.isEmpty) {
+      return 'أدخل قراءة الإغلاق الختامية لـ $label.';
+    }
+    final closing = _scaled(closingRaw, 3);
+    if (closing == null) {
+      return 'قراءة الإغلاق لـ $label غير صالحة. استخدم أرقاماً فقط (مثل 1234567.000).';
+    }
+    if (closing < 0) {
+      return 'قراءة الإغلاق لـ $label لا يمكن أن تكون سالبة.';
+    }
+    final opening = _scaled(line.opening, 3);
+    if (opening == null) {
+      return 'قراءة الافتتاح لـ $label غير متاحة. تواصل مع المشرف.';
+    }
+    if (closing < opening) {
+      return 'قراءة الإغلاق لـ $label أقل من قراءة الافتتاح (${line.opening}).';
+    }
+    final price = _scaled(line.unitPrice, 3);
+    if (price == null) {
+      return 'تسعيرة الوقود لـ $label غير متاحة. تواصل مع المشرف.';
+    }
+  }
+  final cashRaw = cash.trim();
+  if (cashRaw.isEmpty) {
+    return 'أدخل المبلغ النقدي المسلّم في الصندوق (د.ل).';
+  }
+  final handed = _scaled(cashRaw, 2);
+  if (handed == null) {
+    return 'المبلغ النقدي غير صالح. استخدم أرقاماً فقط (مثل 642.00).';
+  }
+  if (handed < 0) {
+    return 'المبلغ النقدي لا يمكن أن يكون سالباً.';
+  }
+  return null;
+}
+
 /// Same half-up scales as the server: liters 3 dp, money 2 dp. No binary floats.
 DutyPreview? previewDuty({required List<PreviewLine> lines, required String cash}) {
   if (lines.isEmpty) {
@@ -77,7 +129,7 @@ String groupThousands(String number) {
 }
 
 int? _scaled(String raw, int scale) {
-  final trimmed = raw.trim().replaceAll(',', '');
+  final trimmed = _normalizeWesternDigits(raw.trim().replaceAll(',', ''));
   if (trimmed.isEmpty) {
     return null;
   }
@@ -113,6 +165,17 @@ int _roundDiv(int value, int divisor) {
     whole += 1;
   }
   return negative ? -whole : whole;
+}
+
+String _normalizeWesternDigits(String raw) {
+  const eastern = '٠١٢٣٤٥٦٧٨٩';
+  const persian = '۰۱۲۳۴۵۶۷۸۹';
+  var out = raw;
+  for (var digit = 0; digit < 10; digit++) {
+    out = out.replaceAll(eastern[digit], '$digit');
+    out = out.replaceAll(persian[digit], '$digit');
+  }
+  return out;
 }
 
 String _format(int value, int scale) {

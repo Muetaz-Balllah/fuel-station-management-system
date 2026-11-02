@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import Response
 from pydantic import BaseModel
 from sqlmodel import Session
@@ -12,6 +12,8 @@ from attendance.services import (
     open_session,
     options,
     register_attendance,
+    schedule_window,
+    set_session_availability,
     summary,
     update_attendance,
     _parse_date,
@@ -27,6 +29,12 @@ class SessionCreate(BaseModel):
     template_id: str
     business_date: str
     supervisor_id: str | None = None
+
+
+class SessionAvailability(BaseModel):
+    template_id: str
+    business_date: str
+    active: bool
 
 
 class AttendanceCreate(BaseModel):
@@ -73,6 +81,32 @@ def read_sessions(
     return {"items": items, "total": len(items)}
 
 
+@router.get("/sessions/schedule")
+def read_schedule(
+    date_from: str,
+    date_to: str,
+    user: User = Depends(require_permission("attendance.manage")),
+    session: Session = Depends(get_session),
+) -> dict:
+    days = schedule_window(session, user, _parse_date(date_from), _parse_date(date_to))
+    return {"days": days}
+
+
+@router.post("/sessions/availability")
+def post_session_availability(
+    payload: SessionAvailability,
+    user: User = Depends(require_permission("attendance.manage")),
+    session: Session = Depends(get_session),
+) -> dict:
+    return set_session_availability(
+        session,
+        user,
+        payload.template_id,
+        _parse_date(payload.business_date),
+        payload.active,
+    )
+
+
 @router.post("/sessions", status_code=201)
 def post_session(
     payload: SessionCreate,
@@ -85,11 +119,12 @@ def post_session(
 @router.get("/sessions/{session_id}/attendance")
 def read_attendance(
     session_id: uuid.UUID,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=100),
     user: User = Depends(require_permission("attendance.manage")),
     session: Session = Depends(get_session),
 ) -> dict:
-    items = list_attendance(session, user, session_id)
-    return {"items": items, "total": len(items)}
+    return list_attendance(session, user, session_id, page=page, page_size=page_size)
 
 
 @router.get("/sessions/{session_id}/attendance.csv")

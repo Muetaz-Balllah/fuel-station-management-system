@@ -7,7 +7,9 @@ import 'package:frontend/features/dashboard/data/repos/dashboard_repository.dart
 import 'package:frontend/features/dashboard/logic/cubit/dashboard_cubit.dart';
 import 'package:frontend/features/shifts/data/models/shift_models.dart';
 import 'package:frontend/features/shifts/logic/reconcile.dart';
+import 'package:frontend/core/reporting/dashboard_pdf.dart';
 import 'package:go_router/go_router.dart';
+import 'package:printing/printing.dart';
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key, this.cubit});
@@ -40,19 +42,23 @@ class DashboardView extends StatelessWidget {
         child: Text(state.error!, key: const Key('dashboard-error'), style: const TextStyle(color: AppColors.error)),
       );
     }
+    if (state.error != null && state.loaded) {
+      return Center(
+        child: Text(state.error!, key: const Key('dashboard-error'), style: const TextStyle(color: AppColors.error)),
+      );
+    }
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'نظرة عامة على العمليات',
-            style: TextStyle(fontSize: 28, fontWeight: FontWeight.w600, color: AppColors.primary),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'مرحباً بك مجدداً، مدير المحطة. إليك ملخص أداء اليوم.',
-            style: TextStyle(color: AppColors.onSurfaceVariant, fontSize: 16),
+          const Align(
+            alignment: Alignment.centerRight,
+            child: Text(
+              'مرحباً بك مجدداً، مدير المحطة. إليك ملخص أداء اليوم.',
+              textAlign: TextAlign.right,
+              style: TextStyle(color: AppColors.onSurfaceVariant, fontSize: 16),
+            ),
           ),
           const SizedBox(height: 16),
           Wrap(
@@ -66,14 +72,10 @@ class DashboardView extends StatelessWidget {
                 label: Text(state.date.isEmpty ? 'اليوم' : state.date),
               ),
               FilledButton.icon(
-                onPressed: () => _export(context, state.sessions),
-                icon: const Icon(Icons.download),
+                key: const Key('dashboard-export'),
+                onPressed: () => _export(context, state),
+                icon: const Icon(Icons.picture_as_pdf_outlined),
                 label: const Text('تصدير التقرير'),
-              ),
-              OutlinedButton.icon(
-                onPressed: () => context.read<DashboardCubit>().showDesignPreview(),
-                icon: const Icon(Icons.science_outlined),
-                label: const Text('بيانات تجريبية'),
               ),
             ],
           ),
@@ -170,17 +172,25 @@ class DashboardView extends StatelessWidget {
     await context.read<DashboardCubit>().load(date: '${picked.year}-$month-$day');
   }
 
-  void _export(BuildContext context, List<ShiftLogRow> rows) {
-    showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('تصدير التقرير'),
-        content: SingleChildScrollView(child: Text(dashboardCsv(rows), key: const Key('dashboard-export'))),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('إغلاق')),
-        ],
-      ),
-    );
+  Future<void> _export(BuildContext context, DashboardState state) async {
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    try {
+      final bytes = await buildDashboardPdf(
+        date: state.date,
+        revenue: state.revenue,
+        liters: state.liters,
+        inventoryLiters: state.inventoryLiters,
+        staffOnDuty: state.staffOnDuty,
+        sessions: state.sessions,
+        week: state.week,
+      );
+      if (!context.mounted) {
+        return;
+      }
+      await Printing.layoutPdf(onLayout: (_) async => bytes, name: 'daily-report-${state.date}.pdf');
+    } catch (error) {
+      messenger?.showSnackBar(SnackBar(content: Text('تعذر إنشاء ملف PDF. $error')));
+    }
   }
 }
 
@@ -376,7 +386,7 @@ class _ShiftSummary extends StatelessWidget {
                   ),
                 ),
                 TextButton(
-                  onPressed: () => GoRouter.maybeOf(context)?.go('/manager/shifts'),
+                  onPressed: () => GoRouter.maybeOf(context)?.go('/manager/attendance'),
                   child: const Text('سجل كافة الورديات', style: TextStyle(color: Colors.white)),
                 ),
               ],
@@ -417,7 +427,16 @@ class _ShiftSummary extends StatelessWidget {
                     children: [
                       _BodyCell(Text(row.code, style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.primary))),
                       _BodyCell(Text(row.window)),
-                      _BodyCell(Text(row.supervisor)),
+                      _BodyCell(
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(row.supervisor.isEmpty ? '—' : row.supervisor),
+                            if (row.operators.isNotEmpty)
+                              Text(row.operators, style: const TextStyle(fontSize: 11, color: AppColors.onSurfaceVariant)),
+                          ],
+                        ),
+                      ),
                       _BodyCell(Text(row.liters ?? '—')),
                       _BodyCell(Text(row.revenue ?? '—')),
                       _BodyCell(

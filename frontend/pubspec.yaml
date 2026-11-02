@@ -43,6 +43,8 @@ dependencies:
   flutter_secure_storage: ^10.3.4
   google_fonts: ^6.3.2
   file_picker: ^8.3.7
+  pdf: ^3.11.3
+  printing: ^5.14.2
 
 dev_dependencies:
   flutter_test:
@@ -68,6 +70,7 @@ flutter:
 
   assets:
     - assets/images/safety_instructions.png
+    - assets/fonts/NotoNaskhArabic.ttf
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

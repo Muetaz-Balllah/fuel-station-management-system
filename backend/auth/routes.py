@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, File, Response, UploadFile
 from sqlmodel import Session
 
 from auth.schemas import (
@@ -10,6 +10,7 @@ from auth.schemas import (
     UserPublic,
 )
 from auth.services import change_password, login, logout, refresh, to_public
+from users.services import save_photo
 from core.deps import get_current_user
 from db import get_session
 from users.models import User
@@ -31,6 +32,17 @@ def refresh_route(payload: RefreshRequest, session: Session = Depends(get_sessio
 def logout_route(payload: LogoutRequest, session: Session = Depends(get_session)) -> Response:
     logout(session, payload.refresh_token)
     return Response(status_code=204)
+
+
+@router.post("/me/photo", response_model=UserPublic)
+def upload_my_photo(
+    file: UploadFile = File(...),
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> UserPublic:
+    save_photo(session, user, user.id, file)
+    session.refresh(user)
+    return to_public(session, user)
 
 
 @router.get("/me", response_model=UserPublic)

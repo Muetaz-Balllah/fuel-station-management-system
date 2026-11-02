@@ -215,6 +215,31 @@ def update_template(
     return _shift_public(row)
 
 
+def delete_template(session: Session, user: User, template_id: uuid.UUID) -> None:
+    row = session.get(ShiftTemplate, template_id)
+    if row is None or row.station_id != user.station_id:
+        raise AppError("TEMPLATE_NOT_FOUND", "تعذر العثور على الوردية.", 404)
+    from attendance.models import ShiftSession
+
+    linked = session.exec(select(ShiftSession).where(ShiftSession.template_id == row.id)).first()
+    if linked is not None:
+        raise AppError(
+            "TEMPLATE_IN_USE",
+            "لا يمكن حذف وردية لها جلسات مسجّلة. عطّلها من جدول التفعيل أو أفرغ السجل أولاً.",
+            409,
+        )
+    write_audit(
+        session,
+        actor_id=user.id,
+        action="shift_template_deleted",
+        entity="shift_template",
+        entity_id=str(row.id),
+        detail={"name_ar": row.name_ar},
+    )
+    session.delete(row)
+    session.commit()
+
+
 def _add_price(
     session: Session,
     user: User,

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query, File, UploadFile
 from pydantic import BaseModel
 from sqlmodel import Session
 
@@ -12,6 +12,7 @@ from supply.services import (
     list_orders,
     list_suppliers,
     receive_order,
+    save_supplier_logo,
     summary,
     update_supplier,
 )
@@ -77,6 +78,16 @@ def read_supplier(
     return get_supplier(session, user, supplier_id)
 
 
+@router.post("/suppliers/{supplier_id}/logo")
+def upload_supplier_logo(
+    supplier_id: str,
+    file: UploadFile = File(...),
+    user: User = Depends(require_permission("supply.manage")),
+    session: Session = Depends(get_session),
+) -> dict:
+    return save_supplier_logo(session, user, supplier_id, file)
+
+
 @router.patch("/suppliers/{supplier_id}")
 def patch_supplier(
     supplier_id: str,
@@ -97,11 +108,12 @@ def read_summary(
 
 @router.get("/supply-orders")
 def read_orders(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
     user: User = Depends(require_permission("supply.manage")),
     session: Session = Depends(get_session),
 ) -> dict:
-    items = list_orders(session, user)
-    return {"items": items, "total": len(items)}
+    return list_orders(session, user, page=page, page_size=page_size)
 
 
 @router.post("/supply-orders", status_code=201)

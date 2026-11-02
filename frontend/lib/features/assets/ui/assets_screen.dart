@@ -79,19 +79,13 @@ class AssetsView extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'إدارة الخزانات والمضخات',
-                        style: TextStyle(fontSize: 26, fontWeight: FontWeight.w700, color: AppColors.primary),
-                      ),
-                      SizedBox(height: 4),
-                      Text(
-                        'مراقبة حية لمستويات الوقود - بنية تشغيلية مستقلة (خزان مستقل مخصص 1:1 لكل مضخة)',
-                        style: TextStyle(color: AppColors.onSurfaceVariant),
-                      ),
-                    ],
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: Text(
+                      'مراقبة حية لمستويات الوقود — خزان مستقل 1:1 لكل مضخة',
+                      textAlign: TextAlign.right,
+                      style: TextStyle(color: AppColors.onSurfaceVariant),
+                    ),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -113,38 +107,118 @@ class AssetsView extends StatelessWidget {
                 padding: const EdgeInsets.only(top: 12),
                 child: Text(state.error!, key: const Key('assets-error'), style: const TextStyle(color: AppColors.error)),
               ),
-            if (board?.demo == true)
-              const Padding(
-                padding: EdgeInsets.only(top: 8),
-                child: Text('البطاقات الحالية بيانات تجريبية للمقارنة مع التصميم.', style: TextStyle(fontSize: 12)),
-              ),
             const SizedBox(height: 16),
             if (board == null)
               const Padding(
                 padding: EdgeInsets.all(48),
                 child: Center(child: CircularProgressIndicator()),
               )
-            else if (board.cards.isEmpty)
-              const Text('لا توجد مضخات بعد. أضف خزاناً ثم اربطه بمضخة.')
-            else
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  final columns = constraints.maxWidth >= 860 ? 2 : 1;
-                  final width = (constraints.maxWidth - (columns - 1) * 16) / columns;
-                  return Wrap(
-                    spacing: 16,
-                    runSpacing: 16,
-                    children: [
-                      for (final card in board.cards)
-                        SizedBox(width: width, child: _PumpCard(card: card)),
-                    ],
-                  );
-                },
-              ),
+            else ...[
+              if (board.cards.isEmpty && board.freeTanks.isEmpty)
+                const Text('لا توجد مضخات بعد. أضف خزاناً ثم اربطه بمضخة.')
+              else if (board.cards.isNotEmpty)
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final columns = constraints.maxWidth >= 860 ? 2 : 1;
+                    final width = (constraints.maxWidth - (columns - 1) * 16) / columns;
+                    return Wrap(
+                      spacing: 16,
+                      runSpacing: 16,
+                      children: [
+                        for (final card in board.cards)
+                          SizedBox(width: width, child: _PumpCard(card: card)),
+                      ],
+                    );
+                  },
+                ),
+              if (board.freeTanks.isNotEmpty) ...[
+                const SizedBox(height: 20),
+                _FreeTanksPanel(tanks: board.freeTanks),
+              ],
+            ],
             const SizedBox(height: 28),
             _EventLog(state: state),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _FreeTanksPanel extends StatelessWidget {
+  const _FreeTanksPanel({required this.tanks});
+
+  final List<AssetTank> tanks;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFBFDBFE)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'خزانات غير مرتبطة بمضخة',
+            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: AppColors.primary),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'بعد حذف المضخة ينتقل الخزان إلى هذه القائمة. احذف الخزان من هنا أو اربطه بمضخة جديدة عبر «إضافة مضخة».',
+            style: TextStyle(fontSize: 12, color: AppColors.onSurfaceVariant, height: 1.4),
+          ),
+          const SizedBox(height: 12),
+          for (final tank in tanks) _FreeTankRow(tank: tank),
+        ],
+      ),
+    );
+  }
+}
+
+class _FreeTankRow extends StatelessWidget {
+  const _FreeTankRow({required this.tank});
+
+  final AssetTank tank;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.outlineVariant),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('${tank.code} • ${tank.name}', style: const TextStyle(fontWeight: FontWeight.w700)),
+                Text(
+                  '${tank.productName} • ${tank.percent}% • L ${formatQty(tank.currentLiters)} / ${formatQty(tank.capacityLiters)}',
+                  style: const TextStyle(fontSize: 12, color: AppColors.onSurfaceVariant),
+                ),
+              ],
+            ),
+          ),
+          TextButton(onPressed: () => _adjust(context, tank), child: const Text('تسوية')),
+          TextButton(
+            onPressed: () => _confirmDelete(
+              context,
+              'حذف الخزان ${tank.code} نهائياً؟',
+              () => context.read<AssetsCubit>().deleteTank(tank.id),
+            ),
+            child: const Text('حذف الخزان', style: TextStyle(color: AppColors.error)),
+          ),
+        ],
       ),
     );
   }
@@ -234,13 +308,7 @@ class _PumpCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final nozzle in card.nozzles) _NozzleChip(nozzle: nozzle),
-            ],
-          ),
+          for (final nozzle in card.nozzles) _NozzleRow(nozzle: nozzle, pumpId: card.pump.id),
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,
@@ -256,6 +324,15 @@ class _PumpCard extends StatelessWidget {
                       status: maintenance ? 'active' : 'maintenance',
                     ),
                 child: Text(maintenance ? 'إعادة التشغيل' : 'وضع الصيانة'),
+              ),
+              TextButton(
+                onPressed: () => _confirmDelete(
+                  context,
+                  'حذف المضخة ${card.pump.code}؟\n'
+                  'سيظهر الخزان ${card.tank.code} في قائمة «خزانات غير مرتبطة» بالأسفل ويمكن حذفه من هناك.',
+                  () => context.read<AssetsCubit>().deletePump(card.pump.id),
+                ),
+                child: const Text('حذف المضخة', style: TextStyle(color: AppColors.error)),
               ),
               TextButton(
                 onPressed: () => _adjust(context, card.tank),
@@ -318,29 +395,75 @@ class _CapacityBlock extends StatelessWidget {
   }
 }
 
-class _NozzleChip extends StatelessWidget {
-  const _NozzleChip({required this.nozzle});
+class _NozzleRow extends StatelessWidget {
+  const _NozzleRow({required this.nozzle, required this.pumpId});
 
   final AssetNozzle nozzle;
+  final String pumpId;
 
   @override
   Widget build(BuildContext context) {
     final ready = nozzle.status == 'ready';
     final color = ready ? _green : _orange;
+    final cubit = context.read<AssetsCubit>();
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
+        color: Colors.white,
+        border: Border.all(color: AppColors.outlineVariant),
         borderRadius: BorderRadius.circular(8),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Text('${nozzle.statusLabel}  ${nozzle.code} (${nozzle.label})', style: TextStyle(color: color, fontWeight: FontWeight.w700)),
-          Text('عداد: ${formatQty(nozzle.currentMeter)} L', style: const TextStyle(fontSize: 12)),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('${nozzle.code} (${nozzle.label})', style: TextStyle(color: color, fontWeight: FontWeight.w700)),
+                Text('${nozzle.statusLabel} • عداد ${formatQty(nozzle.currentMeter)} L', style: const TextStyle(fontSize: 12)),
+              ],
+            ),
+          ),
+          TextButton(
+            onPressed: () => cubit.setNozzleStatus(
+              nozzleId: nozzle.id,
+              status: ready ? 'valve_check' : 'ready',
+            ),
+            child: Text(ready ? 'تعطيل مؤقت' : 'تفعيل'),
+          ),
+          TextButton(
+            onPressed: () => _confirmDelete(context, 'حذف المسدس ${nozzle.code}؟', () => cubit.deleteNozzle(nozzle.id)),
+            child: const Text('حذف', style: TextStyle(color: AppColors.error)),
+          ),
         ],
       ),
     );
+  }
+}
+
+Future<void> _confirmDelete(BuildContext context, String message, Future<bool> Function() action) async {
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: const Text('تأكيد'),
+      content: Text(message),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('إلغاء')),
+        FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('نعم')),
+      ],
+    ),
+  );
+  if (ok != true || !context.mounted) {
+    return;
+  }
+  final cubit = context.read<AssetsCubit>();
+  final success = await action();
+  if (!context.mounted) {
+    return;
+  }
+  if (!success && cubit.state.error != null) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(cubit.state.error!)));
   }
 }
 

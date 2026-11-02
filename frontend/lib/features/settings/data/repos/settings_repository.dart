@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:frontend/core/networking/api_client.dart';
+import 'package:frontend/core/networking/upload_file.dart';
 import 'package:frontend/features/settings/data/models/settings_models.dart';
 
 class SettingsRepository {
@@ -21,15 +22,14 @@ class SettingsRepository {
     });
   }
 
-  Future<StationProfile> uploadLogo(String path, String filename) {
+  Future<StationProfile> uploadLogo({
+    required List<int> bytes,
+    required String filename,
+  }) {
     return _guard(() async {
-      final form = FormData.fromMap({
-        'file': await MultipartFile.fromFile(path, filename: filename),
-      });
       final response = await _dio.post(
         '/api/v1/station/logo',
-        data: form,
-        options: Options(contentType: 'multipart/form-data'),
+        data: FormData.fromMap({'file': imagePart(bytes, filename)}),
       );
       return StationProfile.fromJson(response.data as Map<String, dynamic>);
     });
@@ -53,6 +53,20 @@ class SettingsRepository {
   Future<StaffMember> createUser(Map<String, dynamic> body) {
     return _guard(() async {
       final response = await _dio.post('/api/v1/users', data: body);
+      return StaffMember.fromJson(response.data as Map<String, dynamic>);
+    });
+  }
+
+  Future<StaffMember> uploadUserPhoto({
+    required String userId,
+    required List<int> bytes,
+    required String filename,
+  }) {
+    return _guard(() async {
+      final response = await _dio.post(
+        '/api/v1/users/$userId/photo',
+        data: FormData.fromMap({'file': imagePart(bytes, filename)}),
+      );
       return StaffMember.fromJson(response.data as Map<String, dynamic>);
     });
   }
@@ -115,6 +129,12 @@ class SettingsRepository {
     return _guard(() async {
       final response = await _dio.patch('/api/v1/shift-templates/$id', data: draft.toJson());
       return ShiftTemplateItem.fromJson(response.data as Map<String, dynamic>);
+    });
+  }
+
+  Future<void> deleteTemplate(String id) {
+    return _guard(() async {
+      await _dio.delete('/api/v1/shift-templates/$id');
     });
   }
 

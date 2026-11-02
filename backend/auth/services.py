@@ -42,6 +42,7 @@ def to_public(session: Session, user: User) -> UserPublic:
         permissions=permission_codes(session, user.role_id),
         is_maintenance=user.is_maintenance,
         is_active=user.is_active,
+        photo_url=user.photo_url,
         last_login_at=user.last_login_at,
     )
 

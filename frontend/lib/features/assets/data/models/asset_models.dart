@@ -173,13 +173,11 @@ class AssetBoard {
     required this.products,
     required this.cards,
     required this.freeTanks,
-    required this.demo,
   });
 
   final List<AssetProduct> products;
   final List<PumpCardData> cards;
   final List<AssetTank> freeTanks;
-  final bool demo;
 
   factory AssetBoard.fromJson(Map<String, dynamic> json) {
     List<T> read<T>(String key, T Function(Map<String, dynamic>) parse) {
@@ -191,7 +189,6 @@ class AssetBoard {
       products: read('products', AssetProduct.fromJson),
       cards: read('cards', PumpCardData.fromJson),
       freeTanks: read('free_tanks', AssetTank.fromJson),
-      demo: json['demo'] as bool? ?? false,
     );
   }
 }

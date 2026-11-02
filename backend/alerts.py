@@ -3,6 +3,7 @@
 import uuid
 from datetime import timedelta
 
+from sqlalchemy import or_
 from sqlmodel import Session, select
 
 from assets.levels import percent_of
@@ -71,13 +72,34 @@ def note_stale_orders(session: Session, station_id: uuid.UUID) -> None:
         )
 
 
-def list_notifications(session: Session, station_id: uuid.UUID) -> list[dict]:
-    rows = session.exec(
-        select(Notification)
-        .where(Notification.station_id == station_id)
-        .order_by(Notification.created_at.desc())
-    ).all()
+def list_notifications(
+    session: Session,
+    station_id: uuid.UUID,
+    *,
+    user_id: uuid.UUID | None = None,
+) -> list[dict]:
+    statement = select(Notification).where(Notification.station_id == station_id)
+    if user_id is not None:
+        statement = statement.where(or_(Notification.user_id == user_id, Notification.user_id.is_(None)))
+    rows = session.exec(statement.order_by(Notification.created_at.desc())).all()
     return [_public(row) for row in rows]
+
+
+def note_duty_rejected(session: Session, duty, reason: str) -> None:
+    note = reason.strip()
+    if not note:
+        return
+    session.add(
+        Notification(
+            station_id=duty.station_id,
+            user_id=duty.user_id,
+            kind="duty_rejected",
+            title="رفض محضر الوردية",
+            body=f"سبب الرفض من المشرف: {note}",
+            entity_type="shift_duty",
+            entity_id=str(duty.id),
+        )
+    )
 
 
 def mark_read(session: Session, station_id: uuid.UUID, notification_id: str) -> dict:

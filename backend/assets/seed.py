@@ -10,8 +10,8 @@ from users.models import User
 from utils import utcnow
 
 
-def seed_demo_assets(session: Session, station: Station, actor_username: str) -> None:
-    """Demo layout from the tanks mock. Volumes match the ledger rows written here."""
+def seed_initial_assets(session: Session, station: Station, actor_username: str) -> None:
+    """Initial pump layout from the tanks mock. Volumes match the ledger rows written here."""
     existing = session.exec(select(Tank).where(Tank.station_id == station.id)).first()
     if existing is not None:
         return
@@ -47,7 +47,6 @@ def seed_demo_assets(session: Session, station: Station, actor_username: str) ->
             name=spec["tank_name"],
             capacity_liters=as_decimal(spec["capacity"]),
             current_liters=current,
-            is_demo=True,
         )
         session.add(tank)
         session.flush()
@@ -57,7 +56,6 @@ def seed_demo_assets(session: Session, station: Station, actor_username: str) ->
             code=spec["pump_code"],
             name=f"وحدة مضخة {spec['pump_code']}",
             status=spec["status"],
-            is_demo=True,
         )
         session.add(pump)
         session.flush()
@@ -84,8 +82,8 @@ def seed_demo_assets(session: Session, station: Station, actor_username: str) ->
                 movement_type="supply_receipt",
                 liters_delta=received,
                 balance_after=received,
-                source_type="demo",
-                note="بيانات تجريبية",
+                source_type="seed",
+                note="رصيد افتتاحي",
                 created_by=actor.id if actor else None,
                 created_at=receipt_at,
             )
@@ -98,8 +96,8 @@ def seed_demo_assets(session: Session, station: Station, actor_username: str) ->
                 movement_type="shift_sale",
                 liters_delta=-draw,
                 balance_after=current,
-                source_type="demo",
-                note="بيانات تجريبية",
+                source_type="seed",
+                note="رصيد افتتاحي",
                 created_by=actor.id if actor else None,
                 created_at=now,
             )

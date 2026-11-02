@@ -1,5 +1,7 @@
 import 'package:dio/dio.dart';
+import 'package:frontend/core/models/paged_list.dart';
 import 'package:frontend/core/networking/api_client.dart';
+import 'package:frontend/core/networking/upload_file.dart';
 import 'package:frontend/features/supply/data/models/supply_models.dart';
 
 class SupplySummary {
@@ -48,10 +50,35 @@ class SupplyRepository {
     });
   }
 
-  Future<List<SupplyOrderRecord>> fetchOrders() {
+  Future<SupplierRecord> createSupplier({
+    required String name,
+    required String headquarters,
+    required String contactName,
+    required String phone,
+    required String maxDailyLiters,
+  }) {
     return _guard(() async {
-      final response = await _dio.get('/api/v1/supply-orders');
-      return _items(response.data, SupplyOrderRecord.fromJson);
+      final response = await _dio.post(
+        '/api/v1/suppliers',
+        data: {
+          'name': name,
+          'headquarters': headquarters,
+          'contact_name': contactName,
+          'phone': phone,
+          'max_daily_liters': maxDailyLiters,
+        },
+      );
+      return SupplierRecord.fromJson(response.data as Map<String, dynamic>);
+    });
+  }
+
+  Future<PagedList<SupplyOrderRecord>> fetchOrders({int page = 1, int pageSize = 20}) {
+    return _guard(() async {
+      final response = await _dio.get(
+        '/api/v1/supply-orders',
+        queryParameters: {'page': page, 'page_size': pageSize},
+      );
+      return PagedList.fromJson(response.data as Map<String, dynamic>, SupplyOrderRecord.fromJson);
     });
   }
 
@@ -104,6 +131,23 @@ class SupplyRepository {
   Future<void> cancel(String orderId) {
     return _guard(() async {
       await _dio.post('/api/v1/supply-orders/$orderId/cancel');
+    });
+  }
+
+  Future<SupplierRecord> uploadSupplierLogo({
+    required String supplierId,
+    required List<int> bytes,
+    required String filename,
+  }) {
+    return _guard(() async {
+      final form = FormData.fromMap({
+        'file': imagePart(bytes, filename),
+      });
+      final response = await _dio.post(
+        '/api/v1/suppliers/$supplierId/logo',
+        data: form,
+      );
+      return SupplierRecord.fromJson(response.data as Map<String, dynamic>);
     });
   }
 

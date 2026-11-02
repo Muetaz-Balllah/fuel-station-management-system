@@ -48,6 +48,7 @@ class User(SQLModel, table=True):
     email: str | None = Field(default=None, max_length=200)
     password_hash: str = Field(max_length=255)
     job_title: str = Field(default="", max_length=120)
+    photo_url: str | None = Field(default=None, max_length=300)
     is_active: bool = True
     is_maintenance: bool = False
     failed_login_count: int = 0

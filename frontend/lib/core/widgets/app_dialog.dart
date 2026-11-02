@@ -8,12 +8,14 @@ Future<T?> showAppDialog<T>({
   IconData icon = Icons.info_outline,
   required Widget content,
   List<Widget>? actions,
+  List<Widget> Function(BuildContext dialogContext)? actionsBuilder,
   double width = 440,
 }) {
   return showDialog<T>(
     context: context,
+    useRootNavigator: true,
     barrierColor: Colors.black.withValues(alpha: 0.45),
-    builder: (context) {
+    builder: (dialogContext) {
       return Dialog(
         backgroundColor: Colors.transparent,
         insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
@@ -28,15 +30,17 @@ Future<T?> showAppDialog<T>({
                 BoxShadow(color: Color(0x26041539), blurRadius: 32, offset: Offset(0, 16)),
               ],
             ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(dialogContext).height * 0.85),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
                       Container(
                         width: 44,
                         height: 44,
@@ -61,30 +65,30 @@ Future<T?> showAppDialog<T>({
                       ),
                       IconButton(
                         visualDensity: VisualDensity.compact,
-                        onPressed: () => Navigator.of(context).pop(),
+                        onPressed: () => Navigator.of(dialogContext, rootNavigator: true).pop(),
                         icon: const Icon(Icons.close, color: AppColors.outline),
                       ),
-                    ],
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-                  child: content,
-                ),
-                if (actions != null && actions.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        for (var index = 0; index < actions.length; index++) ...[
-                          if (index > 0) const SizedBox(width: 8),
-                          actions[index],
-                        ],
                       ],
                     ),
                   ),
-              ],
+                  Flexible(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+                      child: content,
+                    ),
+                  ),
+                  if ((actionsBuilder != null) || (actions != null && actions.isNotEmpty))
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+                      child: Wrap(
+                        alignment: WrapAlignment.end,
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: actionsBuilder != null ? actionsBuilder(dialogContext) : actions!,
+                      ),
+                    ),
+                ],
+              ),
             ),
           ),
         ),

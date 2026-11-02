@@ -120,6 +120,16 @@ class AssetsCubit extends Cubit<AssetsState> {
     return _mutate(() => _repository.adjustTank(tankId: tankId, litersDelta: delta, note: note));
   }
 
+  Future<bool> deleteTank(String tankId) => _mutate(() => _repository.deleteTank(tankId));
+
+  Future<bool> deletePump(String pumpId) => _mutate(() => _repository.deletePump(pumpId));
+
+  Future<bool> deleteNozzle(String nozzleId) => _mutate(() => _repository.deleteNozzle(nozzleId));
+
+  Future<bool> setNozzleStatus({required String nozzleId, required String status}) {
+    return _mutate(() => _repository.updateNozzleStatus(nozzleId: nozzleId, status: status));
+  }
+
   Future<void> _reloadEvents() async {
     try {
       final events = await _repository.fetchEvents(

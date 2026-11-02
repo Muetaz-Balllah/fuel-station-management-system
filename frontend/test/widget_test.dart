@@ -7,6 +7,7 @@ import 'package:frontend/core/theming/app_colors.dart';
 import 'package:frontend/features/dashboard/data/models/dashboard_models.dart';
 import 'package:frontend/features/dashboard/data/repos/dashboard_repository.dart';
 import 'package:frontend/features/dashboard/logic/cubit/dashboard_cubit.dart';
+import 'package:frontend/features/dashboard/logic/cubit/notification_cubit.dart';
 import 'package:frontend/features/dashboard/ui/dashboard_screen.dart';
 import 'package:frontend/features/settings/ui/widgets/license_banner.dart';
 import 'package:frontend/features/attendance/data/models/attendance_models.dart';
@@ -34,9 +35,8 @@ import 'package:frontend/features/settings/ui/widgets/shift_template_form.dart';
 import 'package:frontend/features/shifts/data/models/shift_models.dart';
 import 'package:frontend/features/shifts/data/repos/shift_repository.dart';
 import 'package:frontend/features/shifts/logic/cubit/duty_cubit.dart';
-import 'package:frontend/features/shifts/logic/cubit/shift_log_cubit.dart';
+import 'package:frontend/features/shifts/ui/duty_approval_panel.dart';
 import 'package:frontend/features/shifts/ui/duty_screen.dart';
-import 'package:frontend/features/shifts/ui/shift_log_screen.dart';
 import 'package:frontend/features/supply/data/models/supply_models.dart';
 import 'package:frontend/features/supply/data/repos/supply_repository.dart';
 import 'package:frontend/features/supply/logic/cubit/supply_cubit.dart';
@@ -86,9 +86,8 @@ void main() {
     expect(find.text('لوحة القيادة'), findsOneWidget);
     expect(find.text('إعدادات النظام'), findsOneWidget);
     expect(find.text('أحمد المصراتي'), findsOneWidget);
-    expect(find.textContaining('مرحباً بك مجدداً'), findsOneWidget);
     expect(find.text('الخزانات والمضخات'), findsOneWidget);
-    expect(find.text('سجل الحضور والدوام'), findsOneWidget);
+    expect(find.text('الحضور والورديات'), findsOneWidget);
     expect(find.text('التوريدات والموردين'), findsOneWidget);
     expect(find.text('طلب تزويد جديد'), findsOneWidget);
   });
@@ -105,7 +104,10 @@ void main() {
     await tester.pumpWidget(
       BlocProvider.value(
         value: session,
-        child: MaterialApp(theme: AppTheme.light(), home: OperatorShell(cubit: duty)),
+        child: MaterialApp(
+          theme: AppTheme.light(),
+          home: OperatorShell(cubit: duty, notifications: NotificationCubit(_FakeDashboardRepo())),
+        ),
       ),
     );
     expect(find.textContaining('لا توجد وردية'), findsOneWidget);
@@ -116,7 +118,7 @@ void main() {
     expect(find.text('محمد مصطفى القذافي'), findsOneWidget);
   });
 
-  testWidgets('settings screen shows the four tabs', (tester) async {
+  testWidgets('settings screen shows the three tabs', (tester) async {
     tester.view.physicalSize = const Size(1280, 900);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -167,7 +169,7 @@ void main() {
     expect(find.text('إدارة المستخدمين'), findsOneWidget);
     expect(find.text('حسابي'), findsOneWidget);
     expect(find.text('الأدوار والصلاحيات'), findsNothing);
-    expect(find.text('إعدادات الورديات ومواعيد المناوبات'), findsWidgets);
+    expect(find.text('إعدادات الورديات ومواعيد المناوبات'), findsNothing);
     await tester.tap(find.text('إدارة المستخدمين'));
     await tester.pumpAndSettle();
     expect(find.text('إضافة مستخدم جديد'), findsOneWidget);
@@ -175,9 +177,6 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('تغيير كلمة المرور'), findsOneWidget);
     expect(find.text('تسجيل الخروج'), findsOneWidget);
-    await tester.tap(find.text('إعدادات الورديات ومواعيد المناوبات').first);
-    await tester.pumpAndSettle();
-    expect(find.text('صباحية'), findsOneWidget);
   });
 
   testWidgets('shift form rejects an empty name', (tester) async {
@@ -219,7 +218,6 @@ void main() {
         board: AssetBoard(
           products: const [AssetProduct(id: 'p', code: 'G95', nameAr: 'بنزين 95')],
           freeTanks: const [],
-          demo: true,
           cards: [
             PumpCardData(
               pump: const AssetPump(
@@ -328,6 +326,7 @@ void main() {
     ];
     final cubit = AttendanceCubit(
       AttendanceRepository(Dio()),
+      ShiftRepository(Dio()),
       initial: const AttendanceState(
         date: '2026-10-26',
         sessionId: 's',
@@ -344,9 +343,28 @@ void main() {
         ),
       ),
     );
+    final settings = SettingsCubit(
+      SettingsRepository(Dio()),
+      initial: const SettingsState(
+        templates: [
+          ShiftTemplateItem(
+            id: 't',
+            nameAr: 'صباحية',
+            startsAt: '08:00',
+            endsAt: '16:00',
+            graceMinutes: 10,
+            isActive: true,
+            crossesMidnight: false,
+          ),
+        ],
+      ),
+    );
     await tester.pumpWidget(
-      BlocProvider.value(
-        value: cubit,
+      MultiBlocProvider(
+        providers: [
+          BlocProvider.value(value: cubit),
+          BlocProvider.value(value: settings),
+        ],
         child: const MaterialApp(home: Scaffold(body: AttendanceView())),
       ),
     );
@@ -358,9 +376,9 @@ void main() {
     expect(lateText.data, '08:45');
     expect(lateText.style?.color, AppColors.error);
     expect(find.text('3 / 6'), findsOneWidget);
-    await tester.tap(find.byKey(const Key('attendance-export')));
-    await tester.pumpAndSettle();
-    final csv = tester.widget<Text>(find.byKey(const Key('attendance-csv'))).data ?? '';
+    expect(find.text('سجل الورديات والاعتماد'), findsNothing);
+    expect(find.byKey(const Key('attendance-export')), findsOneWidget);
+    final csv = attendanceCsv(rows);
     expect(csv, contains('محمد'));
     expect(csv, contains('خالد'));
     expect(csv, contains('سالم'));
@@ -448,9 +466,77 @@ void main() {
     await tester.enterText(find.byKey(const Key('duty-cash')), '647.00');
     await tester.pump();
     expect(tester.widget<Text>(find.byKey(const Key('duty-variance'))).data, 'فائض +5.00');
+    final submit = tester.widget<FilledButton>(find.byKey(const Key('duty-submit')));
+    expect(submit.onPressed, isNotNull);
+    await tester.tap(find.byKey(const Key('duty-submit')));
+    await tester.pumpAndSettle();
+    expect(find.text('تأكيد إغلاق الوردية وتسليم العهدة'), findsOneWidget);
   });
 
-  testWidgets('shift log offers approve and reject for a pending duty', (tester) async {
+  testWidgets('close submit validates on click when closing is below opening', (tester) async {
+    tester.view.physicalSize = const Size(1280, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    const duty = DutyRecord(
+      id: 'd',
+      sessionId: 's',
+      fullName: 'محمد',
+      employeeCode: 'EMP-0122',
+      status: 'open',
+      statusLabel: 'مفتوحة',
+      openedAt: null,
+      liters: null,
+      expectedCash: null,
+      cashHanded: null,
+      variance: null,
+      varianceKind: null,
+      varianceLabel: null,
+      approvedByName: null,
+      rejectReason: null,
+      businessDate: '2026-11-02',
+      lines: [
+        DutyLine(
+          nozzleId: 'a',
+          nozzleCode: 'N1',
+          label: 'يمين',
+          pumpCode: 'PUMP-01',
+          productName: 'بنزين 95',
+          openingMeter: '1841200.000',
+          closingMeter: null,
+          unitPrice: '0.150',
+          liters: null,
+          lineAmount: null,
+        ),
+      ],
+    );
+    final cubit = DutyCubit(
+      ShiftRepository(Dio()),
+      initial: const DutyState(loaded: true, duty: duty, templateName: 'صباحية'),
+    );
+    final session = SessionCubit(_FakeGateway())..signedIn(_operator);
+    await tester.pumpWidget(
+      MultiBlocProvider(
+        providers: [
+          BlocProvider.value(value: session),
+          BlocProvider.value(value: cubit),
+        ],
+        child: const MaterialApp(home: Scaffold(body: DutyView())),
+      ),
+    );
+    await tester.enterText(find.byKey(const Key('close-a')), '1841000.000');
+    await tester.enterText(find.byKey(const Key('duty-cash')), '100.00');
+    await tester.pump();
+    expect(tester.widget<FilledButton>(find.byKey(const Key('duty-submit'))).onPressed, isNotNull);
+    await tester.tap(find.byKey(const Key('duty-submit')));
+    await tester.pumpAndSettle();
+    final error = tester.widget<Text>(find.byKey(const Key('duty-validation-error')));
+    expect(error.data, contains('PUMP-01'));
+    expect(error.data, contains('1841200.000'));
+    expect(find.text('تأكيد إغلاق الوردية وتسليم العهدة'), findsNothing);
+  });
+
+  testWidgets('duty approval panel offers approve and reject for a pending duty', (tester) async {
     tester.view.physicalSize = const Size(1280, 900);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -474,36 +560,20 @@ void main() {
       businessDate: '2026-11-02',
       lines: [],
     );
-    final cubit = ShiftLogCubit(
-      ShiftRepository(Dio()),
-      initial: const ShiftLogState(
-        loaded: true,
-        selectedId: 's1',
-        rows: [
-          ShiftLogRow(
-            id: 's1',
-            code: 'SH-2026-001',
-            businessDate: '2026-11-02',
-            window: 'صباحية 08:00–16:00',
-            supervisor: 'أحمد المصراتي',
-            statusLabel: 'جارية الآن',
-            liters: null,
-            revenue: null,
-            varianceLabel: null,
-          ),
-        ],
-        duties: [pending],
-      ),
-    );
     await tester.pumpWidget(
-      BlocProvider.value(
-        value: cubit,
-        child: const MaterialApp(home: Scaffold(body: ShiftLogView())),
+      MaterialApp(
+        home: Scaffold(
+          body: DutyApprovalPanel(
+            duties: const [pending],
+            onApprove: (_) async => null,
+            onReject: (_, __) async => null,
+          ),
+        ),
       ),
     );
-    expect(find.text('اعتماد'), findsOneWidget);
-    expect(find.text('رفض'), findsOneWidget);
-    expect(find.textContaining('جارية الآن'), findsOneWidget);
+    expect(find.text('اعتماد المحضر'), findsOneWidget);
+    expect(find.text('رفض وإرجاع للمشغّل'), findsOneWidget);
+    expect(find.textContaining('بانتظار توقيع المشرف'), findsWidgets);
   });
 
   testWidgets('supply form only offers tanks of the chosen product', (tester) async {
@@ -665,7 +735,7 @@ void main() {
         child: const MaterialApp(home: Scaffold(body: DashboardView())),
       ),
     );
-    expect(find.text('نظرة عامة على العمليات'), findsOneWidget);
+    expect(find.textContaining('مرحباً بك مجدداً'), findsOneWidget);
     expect(find.textContaining('90.00'), findsWidgets);
     expect(find.textContaining('1,400.000'), findsOneWidget);
     expect(find.text('1'), findsWidgets);
@@ -777,6 +847,16 @@ Future<void> _pumpLogin(WidgetTester tester, AuthGateway gateway) async {
   await tester.ensureVisible(find.byKey(const Key('login-submit')));
 }
 
+class _FakeDashboardRepo extends DashboardRepository {
+  _FakeDashboardRepo() : super(Dio());
+
+  @override
+  Future<List<StationNotice>> notifications() async => const [];
+
+  @override
+  Future<void> markRead(String id) async {}
+}
+
 class _FakeGateway implements AuthGateway {
   _FakeGateway({this.error});
 
@@ -803,6 +883,9 @@ class _FakeGateway implements AuthGateway {
 
   @override
   Future<void> logout() async {}
+
+  @override
+  Future<AuthUser> uploadPhoto({required List<int> bytes, required String filename}) async => _operator;
 
   @override
   Future<AuthUser?> restore() async => null;

@@ -14,6 +14,8 @@ class SupplyState {
     this.week = const [],
     this.suppliers = const [],
     this.orders = const [],
+    this.ordersPage = 1,
+    this.ordersTotal = 0,
     this.products = const [],
     this.tanks = const [],
     this.selectedSupplierId,
@@ -28,7 +30,11 @@ class SupplyState {
   final List<SupplyWeekDay> week;
   final List<SupplierRecord> suppliers;
   final List<SupplyOrderRecord> orders;
+  final int ordersPage;
+  final int ordersTotal;
   final List<SupplyProductOption> products;
+
+  int get ordersPageCount => ordersTotal <= 0 ? 1 : ((ordersTotal + 19) ~/ 20);
   final List<SupplyTankOption> tanks;
   final String? selectedSupplierId;
 
@@ -43,6 +49,8 @@ class SupplyState {
     List<SupplyWeekDay>? week,
     List<SupplierRecord>? suppliers,
     List<SupplyOrderRecord>? orders,
+    int? ordersPage,
+    int? ordersTotal,
     List<SupplyProductOption>? products,
     List<SupplyTankOption>? tanks,
     String? selectedSupplierId,
@@ -57,6 +65,8 @@ class SupplyState {
       week: week ?? this.week,
       suppliers: suppliers ?? this.suppliers,
       orders: orders ?? this.orders,
+      ordersPage: ordersPage ?? this.ordersPage,
+      ordersTotal: ordersTotal ?? this.ordersTotal,
       products: products ?? this.products,
       tanks: tanks ?? this.tanks,
       selectedSupplierId: selectedSupplierId ?? this.selectedSupplierId,
@@ -69,12 +79,13 @@ class SupplyCubit extends Cubit<SupplyState> {
 
   final SupplyRepository _repository;
 
-  Future<void> load() async {
+  Future<void> load({int? ordersPage}) async {
     emit(state.copyWith(clearError: true));
     try {
       final summary = await _repository.fetchSummary();
       final suppliers = await _repository.fetchSuppliers();
-      final orders = await _repository.fetchOrders();
+      final page = ordersPage ?? state.ordersPage;
+      final orders = await _repository.fetchOrders(page: page, pageSize: 20);
       final products = await _repository.fetchProducts();
       final tanks = await _repository.fetchTanks();
       emit(
@@ -86,7 +97,9 @@ class SupplyCubit extends Cubit<SupplyState> {
           activeSuppliers: summary.activeSuppliers,
           week: summary.week,
           suppliers: suppliers,
-          orders: orders,
+          orders: orders.items,
+          ordersPage: orders.page,
+          ordersTotal: orders.total,
           products: products,
           tanks: tanks,
           selectedSupplierId: state.selectedSupplierId ?? (suppliers.isEmpty ? null : suppliers.first.id),
@@ -98,6 +111,33 @@ class SupplyCubit extends Cubit<SupplyState> {
   }
 
   void selectSupplier(String id) => emit(state.copyWith(selectedSupplierId: id));
+
+  Future<void> setOrdersPage(int page) => load(ordersPage: page);
+
+  Future<SupplierRecord?> createSupplier({
+    required String name,
+    required String headquarters,
+    required String contactName,
+    required String phone,
+    required String maxDailyLiters,
+  }) async {
+    emit(state.copyWith(clearError: true));
+    try {
+      final created = await _repository.createSupplier(
+        name: name,
+        headquarters: headquarters,
+        contactName: contactName,
+        phone: phone,
+        maxDailyLiters: maxDailyLiters,
+      );
+      final suppliers = await _repository.fetchSuppliers();
+      emit(state.copyWith(suppliers: suppliers, selectedSupplierId: created.id));
+      return created;
+    } on ApiException catch (error) {
+      emit(state.copyWith(error: error.message));
+      return null;
+    }
+  }
 
   Future<bool> createOrder({
     required String supplierId,
@@ -122,6 +162,12 @@ class SupplyCubit extends Cubit<SupplyState> {
   Future<bool> receive(String orderId) => _mutate(() => _repository.receive(orderId));
 
   Future<bool> cancel(String orderId) => _mutate(() => _repository.cancel(orderId));
+
+  Future<bool> uploadLogo({required String supplierId, required List<int> bytes, required String filename}) {
+    return _mutate(() async {
+      await _repository.uploadSupplierLogo(supplierId: supplierId, bytes: bytes, filename: filename);
+    });
+  }
 
   Future<bool> updateSupplier({
     required String id,

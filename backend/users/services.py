@@ -217,6 +217,32 @@ def replace_permissions(
     )
 
 
+def save_photo(session: Session, actor: User, target_id: uuid.UUID, upload) -> StaffPublic:
+    from stations.services import store_image
+
+    target = session.get(User, target_id)
+    if target is None or target.station_id != actor.station_id:
+        raise AppError("USER_NOT_FOUND", "تعذر العثور على الموظف.", 404)
+    if target.id != actor.id:
+        actor_role = session.get(Role, actor.role_id)
+        if actor_role is None or PermissionCode.USERS_MANAGE not in permission_codes(session, actor.role_id):
+            raise AppError("FORBIDDEN", "ليست لديك صلاحية لتعديل صورة هذا الحساب.", 403)
+    target.photo_url = store_image(upload, f"user-{target.id}")
+    target.updated_at = utcnow()
+    session.add(target)
+    write_audit(
+        session,
+        actor_id=actor.id,
+        action="user_photo_updated",
+        entity="user",
+        entity_id=str(target.id),
+        detail={"photo_url": target.photo_url},
+    )
+    session.commit()
+    session.refresh(target)
+    return _staff(session, target)
+
+
 def _staff(session: Session, user: User) -> StaffPublic:
     role = session.get(Role, user.role_id)
     return StaffPublic(
@@ -230,6 +256,7 @@ def _staff(session: Session, user: User) -> StaffPublic:
         role_name_ar=role.name_ar if role else "",
         is_active=user.is_active,
         is_maintenance=user.is_maintenance,
+        photo_url=user.photo_url,
         last_login_at=user.last_login_at,
     )
 

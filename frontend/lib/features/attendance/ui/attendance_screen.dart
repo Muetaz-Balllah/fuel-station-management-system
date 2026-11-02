@@ -1,10 +1,22 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:frontend/core/constants/safety_instructions.dart';
 import 'package:frontend/core/di/injection.dart';
+import 'package:frontend/core/reporting/attendance_pdf.dart';
 import 'package:frontend/core/theming/app_colors.dart';
+import 'package:frontend/core/widgets/app_dialog.dart';
+import 'package:frontend/core/widgets/pagination_bar.dart';
 import 'package:frontend/features/attendance/data/models/attendance_models.dart';
 import 'package:frontend/features/attendance/data/repos/attendance_repository.dart';
 import 'package:frontend/features/attendance/logic/cubit/attendance_cubit.dart';
+import 'package:frontend/features/shifts/data/repos/shift_repository.dart';
+import 'package:frontend/features/shifts/ui/duty_approval_panel.dart';
+import 'package:frontend/features/settings/data/repos/settings_repository.dart';
+import 'package:frontend/features/settings/logic/cubit/settings_cubit.dart';
+import 'package:frontend/features/settings/ui/widgets/shift_templates_panel.dart';
+import 'package:printing/printing.dart';
 
 const _green = Color(0xFF15803D);
 
@@ -16,12 +28,21 @@ class AttendanceScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (cubit != null) {
-      return BlocProvider.value(value: cubit!, child: const AttendanceView());
+      return MultiBlocProvider(
+        providers: [
+          BlocProvider.value(value: cubit!),
+          BlocProvider(create: (_) => SettingsCubit(getIt<SettingsRepository>())..load()),
+        ],
+        child: const AttendanceView(),
+      );
     }
     final today = DateTime.now();
     final date = '${today.year.toString().padLeft(4, '0')}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
-    return BlocProvider(
-      create: (_) => AttendanceCubit(getIt<AttendanceRepository>())..load(date: date),
+    return MultiBlocProvider(
+      providers: [
+        BlocProvider(create: (_) => AttendanceCubit(getIt<AttendanceRepository>(), getIt<ShiftRepository>())..load(date: date)),
+        BlocProvider(create: (_) => SettingsCubit(getIt<SettingsRepository>())..load()),
+      ],
       child: const AttendanceView(),
     );
   }
@@ -32,11 +53,69 @@ class AttendanceView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final state = context.watch<AttendanceCubit>().state;
-    final summary = state.summary;
     return ColoredBox(
       color: AppColors.background,
-      child: ListView(
+      child: DefaultTabController(
+        length: 2,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const TabBar(
+              isScrollable: true,
+              labelColor: AppColors.primary,
+              unselectedLabelColor: AppColors.outline,
+              indicatorColor: AppColors.primary,
+              tabs: [
+                Tab(key: Key('tab-attendance-ops'), text: 'الحضور والتكليف'),
+                Tab(key: Key('tab-shift-config'), text: 'إعداد الورديات ومواعيد المناوبات'),
+              ],
+            ),
+            const Expanded(
+              child: TabBarView(
+                children: [
+                  AttendanceOperationsTab(),
+                  ShiftTemplatesPanel(),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class AttendanceOperationsTab extends StatefulWidget {
+  const AttendanceOperationsTab({super.key});
+
+  @override
+  State<AttendanceOperationsTab> createState() => _AttendanceOperationsTabState();
+}
+
+class _AttendanceOperationsTabState extends State<AttendanceOperationsTab> {
+  Timer? _refresh;
+
+  @override
+  void initState() {
+    super.initState();
+    _refresh = Timer.periodic(const Duration(seconds: 20), (_) {
+      if (mounted) {
+        context.read<AttendanceCubit>().load(silent: true);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _refresh?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final state = context.watch<AttendanceCubit>().state;
+    final summary = state.summary;
+    return ListView(
         padding: const EdgeInsets.all(24),
         children: [
           Text('تاريخ اليوم: ${state.date}', style: const TextStyle(color: AppColors.onSurfaceVariant)),
@@ -75,7 +154,7 @@ class AttendanceView extends StatelessWidget {
             children: [
               const Expanded(
                 child: Text(
-                  'سجل تفصيلي وتوزيع المضخات',
+                  'الحضور المرتبط بالوردية وتوزيع المضخات',
                   style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary),
                 ),
               ),
@@ -93,8 +172,43 @@ class AttendanceView extends StatelessWidget {
               ),
             ],
           ),
+          if (state.sessions.length > 1) ...[
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final session in state.sessions)
+                  ChoiceChip(
+                    label: Text('${session.templateName} (${session.code})'),
+                    selected: session.id == state.sessionId,
+                    onSelected: (_) => context.read<AttendanceCubit>().selectSession(session.id),
+                  ),
+              ],
+            ),
+          ],
           const SizedBox(height: 12),
           _Table(rows: state.rows),
+          PaginationBar(
+            page: state.attendancePage,
+            pageCount: state.attendancePageCount,
+            total: state.attendanceTotal,
+            onPage: (page) => context.read<AttendanceCubit>().setAttendancePage(page),
+          ),
+          const SizedBox(height: 20),
+          DutyApprovalPanel(
+            key: const Key('attendance-duty-approval'),
+            title: 'سجل الورديات واعتماد الإغلاق (مباشر)',
+            duties: state.sessionDuties,
+            onApprove: (id) => context.read<AttendanceCubit>().approveDuty(id),
+            onReject: (id, reason) => context.read<AttendanceCubit>().rejectDuty(id, reason),
+          ),
+          PaginationBar(
+            page: state.dutiesPage,
+            pageCount: state.dutiesPageCount,
+            total: state.dutiesTotal,
+            onPage: (page) => context.read<AttendanceCubit>().setDutiesPage(page),
+          ),
           const SizedBox(height: 24),
           LayoutBuilder(
             builder: (context, constraints) {
@@ -120,29 +234,38 @@ class AttendanceView extends StatelessWidget {
               );
               final safety = SizedBox(
                 height: panelHeight,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      Image.asset('assets/images/safety_instructions.png', fit: BoxFit.cover),
-                      Container(color: AppColors.primary.withValues(alpha: 0.72)),
-                      const Padding(
-                        padding: EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            Text('تعليمات السلامة', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 18)),
-                            SizedBox(height: 8),
-                            Text(
-                              'تأكد من تسجيل البصمة عند دخول المناطق المحظورة والالتزام بمهمات الوقاية الشخصية.',
-                              style: TextStyle(color: Colors.white, height: 1.5),
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: () => _openSafetyInstructions(context),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          Image.asset('assets/images/safety_instructions.png', fit: BoxFit.cover),
+                          Container(color: AppColors.primary.withValues(alpha: 0.72)),
+                          const Padding(
+                            padding: EdgeInsets.all(16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
+                                Text('تعليمات السلامة', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 18)),
+                                SizedBox(height: 8),
+                                Text(
+                                  'تأكد من تسجيل البصمة عند دخول المناطق المحظورة والالتزام بمهمات الوقاية الشخصية.',
+                                  style: TextStyle(color: Colors.white, height: 1.5),
+                                ),
+                                SizedBox(height: 8),
+                                Text('اضغط لعرض التعليمات كاملة', style: TextStyle(color: Colors.white70, fontSize: 12)),
+                              ],
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
                 ),
               );
@@ -161,7 +284,6 @@ class AttendanceView extends StatelessWidget {
             },
           ),
         ],
-      ),
     );
   }
 }
@@ -206,11 +328,23 @@ class _Table extends StatelessWidget {
     if (rows.isEmpty) {
       return const Text('لا يوجد تكليف في هذا اليوم.');
     }
-    return Column(
-      children: [
-        const _Header(),
-        for (final row in rows) _AttendanceLine(row: row),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const minWidth = 980.0;
+        final table = Column(
+          children: [
+            const _Header(),
+            for (final row in rows) _AttendanceLine(row: row),
+          ],
+        );
+        if (constraints.maxWidth >= minWidth) {
+          return table;
+        }
+        return SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: SizedBox(width: minWidth, child: table),
+        );
+      },
     );
   }
 }
@@ -229,8 +363,9 @@ class _Header extends StatelessWidget {
           SizedBox(width: 180, child: Text('اسم الموظف', style: style)),
           SizedBox(width: 110, child: Text('الرقم الوظيفي', style: style)),
           SizedBox(width: 220, child: Text('التكليف الميداني', style: style)),
-          SizedBox(width: 90, child: Text('وقت الحضور', style: style)),
-          SizedBox(width: 90, child: Text('وقت الانصراف', style: style)),
+          SizedBox(width: 90, child: Text('بدء الوردية', style: style)),
+          SizedBox(width: 90, child: Text('نهاية الوردية', style: style)),
+          SizedBox(width: 120, child: Text('حالة العهدة', style: style)),
           SizedBox(width: 80, child: Text('الحالة', style: style)),
           SizedBox(width: 140, child: Text('ملاحظات التشغيل', style: style)),
           SizedBox(width: 72),
@@ -273,10 +408,11 @@ class _AttendanceLine extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       for (final item in row.assignments)
-                        Text('${item.pumpCode}  مسدس ${item.nozzleCode}'),
+                        Text('${item.pumpCode}  مسدس ${item.nozzleCode}', softWrap: true),
                       Text(
                         row.assignments.map((item) => '${item.productName} • ${item.label}').join('، '),
                         style: const TextStyle(fontSize: 11, color: AppColors.onSurfaceVariant),
+                        softWrap: true,
                       ),
                     ],
                   ),
@@ -290,6 +426,17 @@ class _AttendanceLine extends StatelessWidget {
             ),
           ),
           SizedBox(width: 90, child: Text(row.checkOutLabel ?? '—')),
+          SizedBox(
+            width: 120,
+            child: Text(
+              row.duty?.statusLabel ?? '—',
+              softWrap: true,
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: row.duty?.status == 'pending_approval' ? AppColors.warning : AppColors.onSurface,
+              ),
+            ),
+          ),
           SizedBox(
             width: 80,
             child: Text(
@@ -356,22 +503,13 @@ class _WeekBars extends StatelessWidget {
 }
 
 Future<void> _export(BuildContext context, List<AttendanceRow> rows) async {
-  final csv = attendanceCsv(rows);
-  await showDialog<void>(
-    context: context,
-    builder: (context) {
-      return AlertDialog(
-        title: const Text('تصدير تقرير التكليفات'),
-        content: SizedBox(
-          width: 480,
-          child: SingleChildScrollView(child: Text(csv, key: const Key('attendance-csv'))),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('إغلاق')),
-        ],
-      );
-    },
-  );
+  final messenger = ScaffoldMessenger.maybeOf(context);
+  try {
+    final bytes = await buildAttendancePdf(rows: rows);
+    await Printing.layoutPdf(onLayout: (_) async => bytes, name: 'attendance-report.pdf');
+  } catch (error) {
+    messenger?.showSnackBar(SnackBar(content: Text('تعذر إنشاء ملف PDF. $error')));
+  }
 }
 
 Future<void> _register(BuildContext context, AttendanceState state) async {
@@ -551,4 +689,40 @@ Future<void> _edit(BuildContext context, AttendanceRow row) async {
   checkIn.dispose();
   checkOut.dispose();
   note.dispose();
+}
+
+Future<void> _openSafetyInstructions(BuildContext context) {
+  return showAppDialog<void>(
+    context: context,
+    title: 'تعليمات السلامة',
+    subtitle: 'إرشادات إلزامية لجميع العاملين في المحطة',
+    icon: Icons.health_and_safety_outlined,
+    width: 520,
+    content: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final line in kSafetyInstructionBullets)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.only(top: 6),
+                  child: Icon(Icons.circle, size: 7, color: AppColors.primary),
+                ),
+                const SizedBox(width: 10),
+                Expanded(child: Text(line, style: const TextStyle(height: 1.6, fontSize: 14))),
+              ],
+            ),
+          ),
+      ],
+    ),
+    actionsBuilder: (dialogContext) => [
+      FilledButton(
+        onPressed: () => Navigator.of(dialogContext, rootNavigator: true).pop(),
+        child: const Text('فهمت'),
+      ),
+    ],
+  );
 }

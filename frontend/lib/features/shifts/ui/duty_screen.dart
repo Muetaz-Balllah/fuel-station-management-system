@@ -4,18 +4,22 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:frontend/core/theming/app_colors.dart';
+import 'package:frontend/core/widgets/stored_image.dart';
 import 'package:frontend/features/auth/logic/cubit/session_cubit.dart';
 import 'package:frontend/features/shifts/data/models/shift_models.dart';
 import 'package:frontend/features/settings/data/shift_roster.dart';
 import 'package:frontend/features/shifts/logic/cubit/duty_cubit.dart';
 import 'package:frontend/core/widgets/app_dialog.dart';
+import 'package:frontend/core/widgets/pagination_bar.dart';
+import 'package:frontend/features/shifts/logic/duty_format.dart';
 import 'package:frontend/features/shifts/logic/reconcile.dart';
 
 class DutyView extends StatelessWidget {
-  const DutyView({super.key, this.onShowHistory, this.photo});
+  const DutyView({super.key, this.onShowHistory, this.photo, this.photoUrl});
 
   final VoidCallback? onShowHistory;
   final Uint8List? photo;
+  final String? photoUrl;
 
   @override
   Widget build(BuildContext context) {
@@ -32,16 +36,16 @@ class DutyView extends StatelessWidget {
         if (wide) ...[
           const _DesktopTitle(),
           const _DesktopMetaRow(),
-          _ProfileBanner(user: user, state: state, photo: photo, wide: wide),
+          _ProfileBanner(user: user, state: state, photo: photo, photoUrl: photoUrl, wide: wide),
         ] else
-          _MobileProfileCard(user: user, state: state, photo: photo),
+          _MobileProfileCard(user: user, state: state, photo: photo, photoUrl: photoUrl),
         if (state.error != null)
           Padding(
             padding: const EdgeInsets.only(top: 12),
             child: Text(state.error!, key: const Key('duty-error'), style: const TextStyle(color: AppColors.error)),
           ),
         const SizedBox(height: 16),
-        if (state.duty == null && !state.canOpen)
+        if (state.duty == null && !state.canOpen && !state.selfService)
           Text(
             state.reason ?? 'لا توجد وردية مكلّفة لك اليوم.',
             key: const Key('duty-blocked'),
@@ -123,11 +127,12 @@ class _DesktopMetaRowState extends State<_DesktopMetaRow> {
 }
 
 class _MobileProfileCard extends StatelessWidget {
-  const _MobileProfileCard({required this.user, required this.state, required this.photo});
+  const _MobileProfileCard({required this.user, required this.state, required this.photo, required this.photoUrl});
 
   final dynamic user;
   final DutyState state;
   final Uint8List? photo;
+  final String? photoUrl;
 
   @override
   Widget build(BuildContext context) {
@@ -152,9 +157,11 @@ class _MobileProfileCard extends StatelessWidget {
                 child: SizedBox(
                   width: 48,
                   height: 48,
-                  child: photo == null
-                      ? const ColoredBox(color: Color(0xFFE7EEFF), child: Icon(Icons.person, color: AppColors.primary))
-                      : Image.memory(photo!, fit: BoxFit.cover),
+                  child: StoredImage(
+                    bytes: photo,
+                    url: photoUrl,
+                    placeholder: const ColoredBox(color: Color(0xFFE7EEFF), child: Icon(Icons.person, color: AppColors.primary)),
+                  ),
                 ),
               ),
               const SizedBox(width: 12),
@@ -222,11 +229,12 @@ class _DesktopTitle extends StatelessWidget {
 }
 
 class _ProfileBanner extends StatelessWidget {
-  const _ProfileBanner({required this.user, required this.state, required this.photo, required this.wide});
+  const _ProfileBanner({required this.user, required this.state, required this.photo, required this.photoUrl, required this.wide});
 
   final dynamic user;
   final DutyState state;
   final Uint8List? photo;
+  final String? photoUrl;
   final bool wide;
 
   @override
@@ -241,12 +249,14 @@ class _ProfileBanner extends StatelessWidget {
           child: SizedBox(
             width: 64,
             height: 64,
-            child: photo == null
-                ? const ColoredBox(
-                    color: Color(0xFF0F172A),
-                    child: Icon(Icons.person, color: Colors.white),
-                  )
-                : Image.memory(photo!, fit: BoxFit.cover),
+            child: StoredImage(
+              bytes: photo,
+              url: photoUrl,
+              placeholder: const ColoredBox(
+                color: Color(0xFF0F172A),
+                child: Icon(Icons.person, color: Colors.white),
+              ),
+            ),
           ),
         ),
         const SizedBox(width: 12),
@@ -343,7 +353,9 @@ class _DesktopBody extends StatelessWidget {
           LayoutBuilder(
             builder: (context, constraints) {
               final opening = _OpeningCard(duty: duty);
-              final close = duty.canClose ? _CloseForm(duty: duty, compact: false) : _Waiting(duty: duty);
+              final close = duty.canClose
+                  ? _CloseForm(key: ValueKey(duty.id), duty: duty, compact: false)
+                  : _Waiting(duty: duty);
               if (constraints.maxWidth < 860) {
                 return Column(children: [opening, const SizedBox(height: 16), close]);
               }
@@ -418,7 +430,7 @@ class _PhoneBodyState extends State<_PhoneBody> {
               else if (duty == null)
                 const Text('افتح الوردية أولاً ثم أدخل قراءات الإغلاق.')
               else if (duty.canClose)
-                _CloseForm(duty: duty, compact: true)
+                _CloseForm(key: ValueKey(duty.id), duty: duty, compact: true)
               else
                 _Waiting(duty: duty),
             ],
@@ -473,18 +485,27 @@ class _MobileHistoryPreview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final rows = state.history.take(2).toList();
+    final rows = state.history;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Row(
           children: [
-            const Expanded(child: Text('آخر الورديات المعتمدة', style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.primary))),
-            TextButton(onPressed: onShowHistory, child: const Text('عرض السجل الكامل')),
+            const Expanded(child: Text('سجل الورديات السابقة', style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.primary))),
+            Text('${state.historyTotal} سجل', style: const TextStyle(fontSize: 11, color: AppColors.onSurfaceVariant)),
           ],
         ),
-        for (final row in rows) _HistoryCard(row: row, mobile: true),
-        if (rows.isEmpty) const Text('لا توجد ورديات سابقة.'),
+        const SizedBox(height: 8),
+        if (rows.isEmpty) const Text('لا توجد ورديات سابقة.') else for (final row in rows) _HistoryCard(row: row, mobile: true),
+        PaginationBar(
+          page: state.historyPage,
+          pageCount: state.historyPageCount,
+          total: state.historyTotal,
+          onPage: (page) {
+            context.read<DutyCubit>().loadHistoryPage(page);
+            onShowHistory?.call();
+          },
+        ),
       ],
     );
   }
@@ -495,27 +516,241 @@ class _OpenCard extends StatelessWidget {
 
   final DutyState state;
 
+  bool get _canOpen {
+    if (state.busy || state.duty != null) {
+      return false;
+    }
+    return state.canOpen && state.shifts.isNotEmpty && state.nozzles.any((item) => item.selectable);
+  }
+
   @override
   Widget build(BuildContext context) {
-    final nozzles = state.nozzles.where((item) => item.selectable).toList();
+    final session = context.watch<SessionCubit>().state;
+    final signedIn = session is SessionSignedIn ? session.user : null;
+    final name = state.identityName.isEmpty ? (signedIn?.fullName ?? '') : state.identityName;
     return _Card(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const Text('فتح وردية جديدة', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
           const SizedBox(height: 8),
-          for (final nozzle in nozzles)
-            Text('${nozzle.pumpCode} • مسدس ${nozzle.code} — آخر إغلاق ${nozzle.currentMeter}'),
+          if (name.isNotEmpty) Text('سيتم فتح الوردية باسم: $name'),
+          if (!state.canOpen)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(state.reason ?? 'لا توجد وردية متاحة للفتح الآن.'),
+            ),
           const SizedBox(height: 12),
           FilledButton(
             key: const Key('duty-open'),
-            onPressed: state.busy ? null : () => context.read<DutyCubit>().openAssigned(),
-            child: const Text('فتح الوردية'),
+            onPressed: _canOpen ? () => _showOpenShiftPicker(context, state) : null,
+            child: const Text('فتح وردية'),
           ),
         ],
       ),
     );
   }
+}
+
+Map<String, List<AssignedNozzle>> _nozzlesByPump(List<AssignedNozzle> nozzles) {
+  final grouped = <String, List<AssignedNozzle>>{};
+  for (final nozzle in nozzles) {
+    grouped.putIfAbsent(nozzle.pumpCode, () => []).add(nozzle);
+  }
+  return grouped;
+}
+
+Future<void> _showOpenShiftPicker(BuildContext context, DutyState state) async {
+  final cubit = context.read<DutyCubit>();
+  String? templateId;
+  final selectedNozzles = <String>{};
+
+  await showDialog<void>(
+    context: context,
+    barrierColor: Colors.black.withValues(alpha: 0.45),
+    builder: (dialogContext) {
+      return StatefulBuilder(
+        builder: (context, setLocal) {
+          final shift = state.shifts.where((item) => item.templateId == templateId).firstOrNull;
+          final pumps = _nozzlesByPump(state.nozzles);
+          void chooseShift(String? value) {
+            setLocal(() {
+              templateId = value;
+              selectedNozzles
+                ..clear()
+                ..addAll(state.nozzles.where((item) => item.selectable).map((item) => item.id));
+            });
+          }
+          return Dialog(
+            insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 560),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE7EEFF),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Icon(Icons.schedule, color: AppColors.primary),
+                        ),
+                        const SizedBox(width: 12),
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('فتح وردية', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
+                              SizedBox(height: 4),
+                              Text('اختر الوردية والمضخات التي ستتسلمها اليوم', style: TextStyle(color: AppColors.onSurfaceVariant, height: 1.4)),
+                            ],
+                          ),
+                        ),
+                        IconButton(onPressed: () => Navigator.pop(dialogContext), icon: const Icon(Icons.close)),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    ConstrainedBox(
+                      constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.52),
+                      child: SingleChildScrollView(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            const Text('الورديات المتاحة', style: TextStyle(fontWeight: FontWeight.w700)),
+                            const SizedBox(height: 8),
+                            for (final item in state.shifts)
+                              Material(
+                                color: templateId == item.templateId ? const Color(0xFFF0F3FF) : const Color(0xFFF8FAFC),
+                                borderRadius: BorderRadius.circular(12),
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(12),
+                                  onTap: () => chooseShift(item.templateId),
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(12),
+                                    child: Row(
+                                      children: [
+                                        Radio<String>(
+                                          value: item.templateId,
+                                          groupValue: templateId,
+                                          onChanged: chooseShift,
+                                        ),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(item.window.isEmpty ? item.templateName : item.window, style: const TextStyle(fontWeight: FontWeight.w700)),
+                                              if (item.rosteredName != null && item.rosteredName!.isNotEmpty)
+                                                Text('تكليف أولي: ${item.rosteredName}', style: const TextStyle(fontSize: 12, color: AppColors.onSurfaceVariant)),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            const SizedBox(height: 16),
+                            if (shift == null)
+                              const Text('اختر الوردية أولاً، ثم تظهر مضخاتها ومسدساتها.')
+                            else ...[
+                              const Text('مضخات الوردية ومسدساتها', style: TextStyle(fontWeight: FontWeight.w700)),
+                              const SizedBox(height: 8),
+                              if (pumps.isEmpty)
+                                Text(state.reason ?? 'لا توجد مضخات لهذه الوردية.')
+                              else
+                                for (final entry in pumps.entries) ...[
+                                  Container(
+                                    margin: const EdgeInsets.only(bottom: 8),
+                                    padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFF8FAFC),
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            const Icon(Icons.local_gas_station, size: 18, color: AppColors.primary),
+                                            const SizedBox(width: 8),
+                                            Text('مضخة ${entry.key}', style: const TextStyle(fontWeight: FontWeight.w700)),
+                                            const Spacer(),
+                                            Text('${entry.value.length} مسدس', style: const TextStyle(fontSize: 12, color: AppColors.onSurfaceVariant)),
+                                          ],
+                                        ),
+                                        for (final nozzle in entry.value)
+                                          CheckboxListTile(
+                                            contentPadding: EdgeInsets.zero,
+                                            value: selectedNozzles.contains(nozzle.id),
+                                            title: Text('مسدس ${nozzle.code}${nozzle.label.isEmpty ? '' : ' — ${nozzle.label}'}'),
+                                            subtitle: Text(
+                                              nozzle.selectable
+                                                  ? '${nozzle.productName.isEmpty ? 'وقود' : nozzle.productName} — آخر إغلاق ${nozzle.currentMeter}${nozzle.unitPrice == null ? '' : ' • ${nozzle.unitPrice} د.ل/ل'}'
+                                                  : (nozzle.blockReason ?? 'غير متاح'),
+                                            ),
+                                            onChanged: nozzle.selectable
+                                                ? (checked) {
+                                                    setLocal(() {
+                                                      if (checked ?? false) {
+                                                        selectedNozzles.add(nozzle.id);
+                                                      } else {
+                                                        selectedNozzles.remove(nozzle.id);
+                                                      }
+                                                    });
+                                                  }
+                                                : null,
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('إلغاء')),
+                        const SizedBox(width: 8),
+                        FilledButton(
+                          onPressed: shift == null || selectedNozzles.isEmpty
+                              ? null
+                              : () async {
+                                  final chosen = state.nozzles.where((item) => item.selectable && selectedNozzles.contains(item.id)).toList();
+                                  final ok = await cubit.openClaim(
+                                    sessionId: shift.sessionId,
+                                    templateId: shift.templateId,
+                                    nozzles: chosen,
+                                  );
+                                  if (ok && dialogContext.mounted) {
+                                    Navigator.pop(dialogContext);
+                                  }
+                                },
+                          child: const Text('تأكيد فتح الوردية'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      );
+    },
+  );
 }
 
 class _OpeningCard extends StatelessWidget {
@@ -729,8 +964,42 @@ class _Waiting extends StatelessWidget {
   }
 }
 
+class _DutyRejectBanner extends StatelessWidget {
+  const _DutyRejectBanner({required this.reason});
+
+  final String reason;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFEF2F2),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFFECACA)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.info_outline, color: AppColors.error, size: 20),
+              SizedBox(width: 8),
+              Text('رفض المشرف — يلزم التصحيح وإعادة الإرسال', style: TextStyle(fontWeight: FontWeight.w800, color: AppColors.error)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text('سبب الرفض: $reason', style: const TextStyle(height: 1.5)),
+        ],
+      ),
+    );
+  }
+}
+
 class _CloseForm extends StatefulWidget {
-  const _CloseForm({required this.duty, this.compact = false});
+  const _CloseForm({super.key, required this.duty, this.compact = false});
 
   final DutyRecord duty;
   final bool compact;
@@ -761,18 +1030,33 @@ class _CloseFormState extends State<_CloseForm> {
     super.dispose();
   }
 
-  DutyPreview? get _preview {
-    return previewDuty(
-      lines: [
-        for (final line in widget.duty.lines)
-          PreviewLine(
-            opening: line.openingMeter,
-            closing: _closings[line.nozzleId]?.text ?? '',
-            unitPrice: line.unitPrice,
-          ),
-      ],
-      cash: _cash.text,
-    );
+  List<PreviewLine> get _previewLines {
+    return [
+      for (final line in widget.duty.lines)
+        PreviewLine(
+          opening: line.openingMeter,
+          closing: _closings[line.nozzleId]?.text ?? '',
+          unitPrice: line.unitPrice,
+        ),
+    ];
+  }
+
+  List<String> get _lineLabels {
+    return [for (final line in widget.duty.lines) '${line.pumpCode} (${line.productName})'];
+  }
+
+  DutyPreview? get _preview => previewDuty(lines: _previewLines, cash: _cash.text);
+
+  bool get _allFieldsFilled {
+    if (widget.duty.lines.isEmpty) {
+      return false;
+    }
+    for (final line in widget.duty.lines) {
+      if (_closings[line.nozzleId]!.text.trim().isEmpty) {
+        return false;
+      }
+    }
+    return _cash.text.trim().isNotEmpty;
   }
 
   @override
@@ -790,6 +1074,8 @@ class _CloseFormState extends State<_CloseForm> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          if (widget.duty.status == 'rejected' && (widget.duty.rejectReason ?? '').isNotEmpty)
+            _DutyRejectBanner(reason: widget.duty.rejectReason!),
           const Text('2. نموذج إنهاء الوردية وتسليم العهدة (المطابقة الفورية)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
           if (prices.length == 1)
             Padding(
@@ -856,7 +1142,7 @@ class _CloseFormState extends State<_CloseForm> {
           FilledButton.icon(
             key: const Key('duty-submit'),
             style: FilledButton.styleFrom(backgroundColor: const Color(0xFFDC2626), minimumSize: const Size.fromHeight(52)),
-            onPressed: preview == null ? null : () => _confirm(context, preview),
+            onPressed: _allFieldsFilled ? () => _attemptSubmit(context) : null,
             icon: const Icon(Icons.check_circle_outline),
             label: const Text('اعتماد الإغلاق النهائي وتسليم العهدة'),
           ),
@@ -865,45 +1151,111 @@ class _CloseFormState extends State<_CloseForm> {
     );
   }
 
-  Future<void> _confirm(BuildContext context, DutyPreview preview) async {
-    final cubit = context.read<DutyCubit>();
+  Future<void> _attemptSubmit(BuildContext formContext) async {
+    final validationError = validateCloseFields(
+      lines: _previewLines,
+      lineLabels: _lineLabels,
+      cash: _cash.text,
+    );
+    if (validationError != null) {
+      await showAppDialog<void>(
+        context: formContext,
+        title: 'تحقق من البيانات',
+        subtitle: 'صحّح الحقل المشار إليه ثم أعد المحاولة.',
+        icon: Icons.error_outline,
+        content: Text(validationError, key: const Key('duty-validation-error')),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.of(formContext, rootNavigator: true).pop(),
+            child: const Text('حسناً'),
+          ),
+        ],
+      );
+      return;
+    }
+    final preview = _preview;
+    if (preview == null) {
+      await showAppDialog<void>(
+        context: formContext,
+        title: 'تحقق من البيانات',
+        icon: Icons.error_outline,
+        content: const Text('تعذّر حساب مطابقة العهدة. راجع القيم المدخلة.'),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.of(formContext, rootNavigator: true).pop(),
+            child: const Text('حسناً'),
+          ),
+        ],
+      );
+      return;
+    }
+    await _confirm(formContext, preview);
+  }
+
+  Future<void> _confirm(BuildContext formContext, DutyPreview preview) async {
+    final cubit = formContext.read<DutyCubit>();
+    final cash = _cash.text.trim();
+    final lines = [
+      for (final line in widget.duty.lines)
+        {
+          'nozzle_id': line.nozzleId,
+          'closing_meter': _closings[line.nozzleId]!.text.trim(),
+        },
+    ];
     await showAppDialog<void>(
-      context: context,
+      context: formContext,
       title: 'تأكيد إغلاق الوردية وتسليم العهدة',
+      subtitle: 'سيتم تسجيل وقت الإغلاق الحالي وإرسال المحضر للاعتماد.',
       icon: Icons.fact_check_outlined,
       content: Text('${preview.phrase}\n${preview.expectedCash} د.ل'),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('إلغاء')),
+        TextButton(
+          onPressed: () => Navigator.of(formContext, rootNavigator: true).pop(),
+          child: const Text('إلغاء'),
+        ),
         FilledButton(
-          onPressed: () async {
-            final saved = await cubit.submitClose(
-              cash: _cash.text.trim(),
-              lines: [
-                for (final line in widget.duty.lines)
-                  {
-                    'nozzle_id': line.nozzleId,
-                    'closing_meter': _closings[line.nozzleId]!.text.trim(),
-                  },
-              ],
-            );
-            if (!context.mounted) {
-              return;
-            }
-            Navigator.pop(context);
-            if (saved != null && context.mounted) {
-              await showAppDialog<void>(
-                context: context,
-                title: 'تم رفع المحضر',
-                icon: Icons.check_circle_outline,
-                content: Text(saved.varianceLabel ?? 'بانتظار توقيع المشرف'),
-                actions: [FilledButton(onPressed: () => Navigator.pop(context), child: const Text('إغلاق'))],
-              );
-            }
+          onPressed: () {
+            final navigator = Navigator.of(formContext, rootNavigator: true);
+            final messenger = ScaffoldMessenger.maybeOf(formContext);
+            navigator.pop();
+            unawaited(_finalizeClose(cubit, navigator.context, messenger, cash: cash, lines: lines));
           },
           child: const Text('نعم، اعتماد الإغلاق'),
         ),
       ],
     );
+  }
+
+  Future<void> _finalizeClose(
+    DutyCubit cubit,
+    BuildContext hostContext,
+    ScaffoldMessengerState? messenger, {
+    required String cash,
+    required List<Map<String, String>> lines,
+  }) async {
+    final saved = await cubit.submitClose(cash: cash, lines: lines);
+    if (!hostContext.mounted) {
+      return;
+    }
+    if (saved != null) {
+      await showAppDialog<void>(
+        context: hostContext,
+        title: 'تم رفع المحضر',
+        icon: Icons.check_circle_outline,
+        content: Text(saved.varianceLabel ?? 'بانتظار توقيع المشرف'),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.of(hostContext, rootNavigator: true).pop(),
+            child: const Text('إغلاق'),
+          ),
+        ],
+      );
+      return;
+    }
+    final message = cubit.state.error;
+    if (message != null && messenger != null) {
+      messenger.showSnackBar(SnackBar(content: Text(message)));
+    }
   }
 }
 
@@ -915,7 +1267,7 @@ class _HistorySection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final rows = state.historyExpanded ? state.history : state.history.take(3).toList();
+    final rows = state.history;
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -936,53 +1288,84 @@ class _HistorySection extends StatelessWidget {
                   style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
                 ),
               ),
-              const Text('آخر 3 مناوبات معتمدة', style: TextStyle(fontSize: 11, color: AppColors.onSurfaceVariant)),
+              Text('${state.historyTotal} سجل', style: const TextStyle(fontSize: 11, color: AppColors.onSurfaceVariant)),
             ],
           ),
           const SizedBox(height: 12),
           if (rows.isEmpty)
             const Text('لا توجد ورديات سابقة.')
           else
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: DataTable(
-                headingRowColor: WidgetStateProperty.all(const Color(0xFFF8FAFC)),
-                columns: const [
-                  DataColumn(label: Text('التاريخ والوردية')),
-                  DataColumn(label: Text('ساعات الدوام')),
-                  DataColumn(label: Text('مضخات الوردية')),
-                  DataColumn(label: Text('إجمالي اللترات')),
-                  DataColumn(label: Text('الإيراد المحتسب')),
-                  DataColumn(label: Text('النقدية المسلّمة')),
-                  DataColumn(label: Text('المطابقة')),
-                  DataColumn(label: Text('المشرف المعتمد')),
-                ],
-                rows: [
-                  for (final row in rows)
-                    DataRow(cells: [
-                      DataCell(Text('${row.businessDate} (${row.statusLabel})')),
-                      DataCell(Text(row.openedAt ?? '—')),
-                      DataCell(Text(row.lines.map((line) => line.pumpCode).toSet().join(' و '))),
-                      DataCell(Text(row.liters ?? '—')),
-                      DataCell(Text(row.expectedCash ?? '—')),
-                      DataCell(Text(row.cashHanded ?? '—')),
-                      DataCell(Text(row.varianceLabel ?? '—')),
-                      DataCell(Text(row.approvedByName ?? '—')),
-                    ]),
-                ],
-              ),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                if (constraints.maxWidth < 720) {
+                  return Column(
+                    children: [for (final row in rows) _HistoryCard(row: row, mobile: true)],
+                  );
+                }
+                const minWidth = 920.0;
+                final width = constraints.maxWidth;
+                final tableWidth = width < minWidth ? minWidth : width;
+                final spacing = ((tableWidth - 760) / 7).clamp(12.0, 40.0);
+                Widget cell(String text, {double max = 128}) {
+                  return ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: max),
+                    child: Text(text, softWrap: true),
+                  );
+                }
+
+                final table = DataTable(
+                  headingRowColor: WidgetStateProperty.all(const Color(0xFFF8FAFC)),
+                  columnSpacing: spacing,
+                  horizontalMargin: 12,
+                  columns: const [
+                    DataColumn(label: Text('التاريخ والوردية')),
+                    DataColumn(label: Text('ساعات الدوام')),
+                    DataColumn(label: Text('مضخات الوردية')),
+                    DataColumn(label: Text('إجمالي اللترات')),
+                    DataColumn(label: Text('الإيراد المحتسب')),
+                    DataColumn(label: Text('النقدية المسلّمة')),
+                    DataColumn(label: Text('المطابقة')),
+                    DataColumn(label: Text('المشرف المعتمد')),
+                  ],
+                  rows: [
+                    for (final row in rows)
+                      DataRow(cells: [
+                        DataCell(
+                          cell(
+                            row.templateName == null || row.templateName!.isEmpty
+                                ? '${row.businessDate} (${row.statusLabel})'
+                                : '${row.businessDate} • ${row.templateName}\n${row.statusLabel}',
+                            max: 140,
+                          ),
+                        ),
+                        DataCell(cell(dutyWorkHoursLabel(row), max: 120)),
+                        DataCell(cell(row.lines.map((line) => line.pumpCode).toSet().join(' و '), max: 120)),
+                        DataCell(cell(row.liters ?? '—')),
+                        DataCell(cell(row.expectedCash ?? '—')),
+                        DataCell(cell(row.cashHanded ?? '—')),
+                        DataCell(cell(row.varianceLabel ?? '—', max: 140)),
+                        DataCell(cell(row.approvedByName ?? '—', max: 120)),
+                      ]),
+                  ],
+                );
+                if (width >= minWidth) {
+                  return SizedBox(width: tableWidth, child: table);
+                }
+                return SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: SizedBox(width: tableWidth, child: table),
+                );
+              },
             ),
-          if (!state.historyExpanded && state.history.length > 3)
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton(
-                onPressed: () {
-                  context.read<DutyCubit>().showHistory();
-                  onShowHistory?.call();
-                },
-                child: const Text('عرض السجل الكامل'),
-              ),
-            ),
+          PaginationBar(
+            page: state.historyPage,
+            pageCount: state.historyPageCount,
+            total: state.historyTotal,
+            onPage: (page) {
+              context.read<DutyCubit>().loadHistoryPage(page);
+              onShowHistory?.call();
+            },
+          ),
         ],
       ),
     );
@@ -994,16 +1377,30 @@ class HistoryList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final rows = context.watch<DutyCubit>().state.history;
+    final state = context.watch<DutyCubit>().state;
+    final rows = state.history;
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
         const ScheduleBoard(),
         const SizedBox(height: 16),
-        const Text('سجل الورديات السابقة', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.primary)),
+        Row(
+          children: [
+            const Expanded(
+              child: Text('سجل الورديات السابقة', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.primary)),
+            ),
+            Text('${state.historyTotal} سجل', style: const TextStyle(fontSize: 11, color: AppColors.onSurfaceVariant)),
+          ],
+        ),
         const SizedBox(height: 8),
         if (rows.isEmpty) const Text('لا توجد ورديات سابقة.'),
-        for (final row in rows) _HistoryCard(row: row),
+        for (final row in rows) _HistoryCard(row: row, mobile: true),
+        PaginationBar(
+          page: state.historyPage,
+          pageCount: state.historyPageCount,
+          total: state.historyTotal,
+          onPage: (page) => context.read<DutyCubit>().loadHistoryPage(page),
+        ),
       ],
     );
   }
@@ -1102,6 +1499,7 @@ class _HistoryCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('${row.businessDate} • ${row.statusLabel}', style: const TextStyle(fontWeight: FontWeight.w700)),
+            Text('ساعات الدوام: ${dutyWorkHoursLabel(row)}'),
             Text('اللترات ${row.liters ?? '—'}'),
             Text('المتوقع ${row.expectedCash ?? '—'} • المسلم ${row.cashHanded ?? '—'}'),
             Text(row.varianceLabel ?? '—'),
@@ -1133,6 +1531,7 @@ class _HistoryCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
+          Text('ساعات الدوام: ${dutyWorkHoursLabel(row)}', style: const TextStyle(fontSize: 12)),
           Text('اللترات ${row.liters ?? '—'} • ${row.expectedCash ?? '—'} د.ل'),
           Text('المشرف: ${row.approvedByName ?? '—'}', style: const TextStyle(fontSize: 12, color: AppColors.onSurfaceVariant)),
         ],
@@ -1142,9 +1541,10 @@ class _HistoryCard extends StatelessWidget {
 }
 
 class AccountPane extends StatelessWidget {
-  const AccountPane({super.key, this.photo, this.onPickPhoto});
+  const AccountPane({super.key, this.photo, this.photoUrl, this.onPickPhoto});
 
   final Uint8List? photo;
+  final String? photoUrl;
   final VoidCallback? onPickPhoto;
 
   @override
@@ -1164,12 +1564,14 @@ class AccountPane extends StatelessWidget {
               child: SizedBox(
                 width: 88,
                 height: 88,
-                child: photo == null
-                    ? const ColoredBox(
-                        color: AppColors.primary,
-                        child: Icon(Icons.person, color: Colors.white, size: 40),
-                      )
-                    : Image.memory(photo!, fit: BoxFit.cover),
+                child: StoredImage(
+                  bytes: photo,
+                  url: photoUrl,
+                  placeholder: const ColoredBox(
+                    color: AppColors.primary,
+                    child: Icon(Icons.person, color: Colors.white, size: 40),
+                  ),
+                ),
               ),
             ),
             const SizedBox(width: 16),
@@ -1271,38 +1673,6 @@ class _Card extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
       ),
       child: child,
-    );
-  }
-}
-
-class _Tile extends StatelessWidget {
-  const _Tile({required this.title, required this.value, this.emphasize = false});
-
-  final String title;
-  final String value;
-  final bool emphasize;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 180,
-      padding: const EdgeInsets.all(12),
-      color: AppColors.background,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: const TextStyle(fontSize: 12, color: AppColors.onSurfaceVariant)),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            key: title == 'الفرق' ? const Key('duty-variance') : null,
-            style: TextStyle(
-              fontWeight: FontWeight.w700,
-              color: emphasize ? AppColors.error : AppColors.success,
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

@@ -22,7 +22,6 @@ class Tank(SQLModel, table=True):
     critical_percent: int = 15
     warning_percent: int = 40
     is_active: bool = True
-    is_demo: bool = False
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
 
@@ -37,7 +36,6 @@ class Pump(SQLModel, table=True):
     code: str = Field(max_length=32)
     name: str = Field(max_length=200)
     status: str = Field(default="active", max_length=32)
-    is_demo: bool = False
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
 

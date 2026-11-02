@@ -86,6 +86,30 @@ class AssetsRepository {
     });
   }
 
+  Future<void> deleteTank(String tankId) {
+    return _guard(() async {
+      await _dio.delete('/api/v1/tanks/$tankId');
+    });
+  }
+
+  Future<void> deletePump(String pumpId) {
+    return _guard(() async {
+      await _dio.delete('/api/v1/pumps/$pumpId');
+    });
+  }
+
+  Future<void> deleteNozzle(String nozzleId) {
+    return _guard(() async {
+      await _dio.delete('/api/v1/nozzles/$nozzleId');
+    });
+  }
+
+  Future<void> updateNozzleStatus({required String nozzleId, required String status}) {
+    return _guard(() async {
+      await _dio.patch('/api/v1/nozzles/$nozzleId', data: {'status': status});
+    });
+  }
+
   Future<void> adjustTank({
     required String tankId,
     required String litersDelta,

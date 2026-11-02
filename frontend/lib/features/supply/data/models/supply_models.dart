@@ -8,6 +8,7 @@ class SupplierRecord {
     required this.maxDailyLiters,
     required this.isActive,
     required this.reliability,
+    this.logoUrl,
   });
 
   final String id;
@@ -18,6 +19,7 @@ class SupplierRecord {
   final String maxDailyLiters;
   final bool isActive;
   final int? reliability;
+  final String? logoUrl;
 
   factory SupplierRecord.fromJson(Map<String, dynamic> json) {
     return SupplierRecord(
@@ -29,6 +31,7 @@ class SupplierRecord {
       maxDailyLiters: json['max_daily_liters'] as String? ?? '0.000',
       isActive: json['is_active'] as bool? ?? true,
       reliability: json['reliability'] as int?,
+      logoUrl: json['logo_url'] as String?,
     );
   }
 }

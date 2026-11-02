@@ -8,6 +8,8 @@ import 'package:frontend/core/theming/app_colors.dart';
 import 'package:frontend/features/shifts/logic/reconcile.dart';
 import 'package:frontend/features/supply/data/models/supply_models.dart';
 import 'package:frontend/features/supply/data/repos/supply_repository.dart';
+import 'package:frontend/core/widgets/pagination_bar.dart';
+import 'package:frontend/core/widgets/stored_image.dart';
 import 'package:frontend/features/supply/logic/cubit/supply_cubit.dart';
 
 class SupplyScreen extends StatelessWidget {
@@ -51,11 +53,19 @@ class _SupplyViewState extends State<SupplyView> {
 
   Future<void> _pickLogo(String supplierId) async {
     final result = await FilePicker.platform.pickFiles(type: FileType.image, withData: true);
-    final bytes = result?.files.single.bytes;
+    final file = result?.files.single;
+    final bytes = file?.bytes;
     if (bytes == null || !mounted) {
       return;
     }
     setState(() => _logos[supplierId] = bytes);
+    final ok = await context.read<SupplyCubit>().uploadLogo(supplierId: supplierId, bytes: bytes, filename: file!.name);
+    if (!mounted) {
+      return;
+    }
+    if (ok) {
+      setState(() => _logos.remove(supplierId));
+    }
   }
 
   void _openOnce() {
@@ -82,11 +92,7 @@ class _SupplyViewState extends State<SupplyView> {
       child: ListView(
         padding: const EdgeInsets.all(24),
         children: [
-          const Text(
-            'إدارة التوريدات والموردين',
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.primary),
-          ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 4),
           Wrap(
             spacing: 12,
             runSpacing: 12,
@@ -105,17 +111,35 @@ class _SupplyViewState extends State<SupplyView> {
           const SizedBox(height: 16),
           Align(
             alignment: Alignment.centerRight,
-            child: FilledButton.icon(
-              key: const Key('supply-create'),
-              onPressed: state.loaded ? () => _create(context, state) : null,
-              icon: const Icon(Icons.add),
-              label: const Text('إنشاء طلب توريد جديد'),
+            child: Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                FilledButton.icon(
+                  key: const Key('supply-create'),
+                  onPressed: state.loaded ? () => _create(context, state) : null,
+                  icon: const Icon(Icons.add),
+                  label: const Text('إنشاء طلب توريد جديد'),
+                ),
+                OutlinedButton.icon(
+                  key: const Key('supply-add-supplier'),
+                  onPressed: state.loaded ? () => _addSupplier(context) : null,
+                  icon: const Icon(Icons.add_business_outlined),
+                  label: const Text('إضافة شركة توريد جديدة'),
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 12),
           LayoutBuilder(
             builder: (context, constraints) {
-              final orders = _OrdersPanel(orders: state.orders);
+              final orders = _OrdersPanel(
+                orders: state.orders,
+                page: state.ordersPage,
+                pageCount: state.ordersPageCount,
+                total: state.ordersTotal,
+                onPage: (page) => context.read<SupplyCubit>().setOrdersPage(page),
+              );
               final details = _SupplierColumn(
                 state: state,
                 supplier: supplier,
@@ -143,6 +167,15 @@ class _SupplyViewState extends State<SupplyView> {
       ),
     );
   }
+}
+
+Widget _logoPlaceholder(String name) {
+  return ColoredBox(
+    color: const Color(0xFFE7EEFF),
+    child: Center(
+      child: Text(name, style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.primary)),
+    ),
+  );
 }
 
 SupplierRecord? _selected(SupplyState state) {
@@ -185,9 +218,19 @@ class _Counter extends StatelessWidget {
 }
 
 class _OrdersPanel extends StatelessWidget {
-  const _OrdersPanel({required this.orders});
+  const _OrdersPanel({
+    required this.orders,
+    required this.page,
+    required this.pageCount,
+    required this.total,
+    required this.onPage,
+  });
 
   final List<SupplyOrderRecord> orders;
+  final int page;
+  final int pageCount;
+  final int total;
+  final ValueChanged<int> onPage;
 
   @override
   Widget build(BuildContext context) {
@@ -207,6 +250,7 @@ class _OrdersPanel extends StatelessWidget {
             const Text('لا توجد طلبات توريد.')
           else
             for (final order in orders) _OrderRow(order: order),
+          PaginationBar(page: page, pageCount: pageCount, total: total, onPage: onPage),
         ],
       ),
     );
@@ -346,14 +390,11 @@ class _SupplierCard extends StatelessWidget {
             child: SizedBox(
               height: 140,
               width: double.infinity,
-              child: logo == null
-                  ? ColoredBox(
-                      color: const Color(0xFFE7EEFF),
-                      child: Center(
-                        child: Text(supplier.name, style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.primary)),
-                      ),
-                    )
-                  : Image.memory(logo!, fit: BoxFit.cover),
+              child: StoredImage(
+                bytes: logo,
+                url: supplier.logoUrl,
+                placeholder: _logoPlaceholder(supplier.name),
+              ),
             ),
           ),
           const SizedBox(height: 8),
@@ -427,6 +468,68 @@ class _WeekBars extends StatelessWidget {
   }
 }
 
+Future<SupplierRecord?> _addSupplier(BuildContext context) async {
+  final cubit = context.read<SupplyCubit>();
+  final name = TextEditingController();
+  final headquarters = TextEditingController();
+  final contact = TextEditingController();
+  final phone = TextEditingController();
+  final daily = TextEditingController(text: '50000');
+  SupplierRecord? created;
+  await showDialog<void>(
+    context: context,
+    builder: (dialogContext) {
+      return AlertDialog(
+        title: const Text('إضافة شركة توريد جديدة'),
+        content: SizedBox(
+          width: 440,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(controller: name, decoration: const InputDecoration(labelText: 'اسم الشركة')),
+                const SizedBox(height: 16),
+                TextField(controller: headquarters, decoration: const InputDecoration(labelText: 'المقر الرئيسي')),
+                const SizedBox(height: 16),
+                TextField(controller: contact, decoration: const InputDecoration(labelText: 'مسؤول الاتصال')),
+                const SizedBox(height: 16),
+                TextField(controller: phone, decoration: const InputDecoration(labelText: 'رقم الهاتف')),
+                const SizedBox(height: 16),
+                TextField(controller: daily, decoration: const InputDecoration(labelText: 'السعة اليومية (لتر)')),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('إلغاء')),
+          FilledButton(
+            onPressed: () async {
+              final row = await cubit.createSupplier(
+                name: name.text,
+                headquarters: headquarters.text,
+                contactName: contact.text,
+                phone: phone.text,
+                maxDailyLiters: daily.text,
+              );
+              if (row != null && dialogContext.mounted) {
+                created = row;
+                Navigator.pop(dialogContext);
+              }
+            },
+            child: const Text('حفظ المورد'),
+          ),
+        ],
+      );
+    },
+  );
+  name.dispose();
+  headquarters.dispose();
+  contact.dispose();
+  phone.dispose();
+  daily.dispose();
+  return created;
+}
+
 Future<void> _create(BuildContext context, SupplyState state) async {
   final cubit = context.read<SupplyCubit>();
   String? supplierId = state.suppliers.isEmpty ? null : state.suppliers.first.id;
@@ -465,6 +568,7 @@ Future<void> _create(BuildContext context, SupplyState state) async {
                       ],
                       onChanged: (value) => setLocal(() => supplierId = value),
                     ),
+                    const SizedBox(height: 16),
                     DropdownButtonFormField<String>(
                       key: const Key('supply-product'),
                       value: productId,
@@ -478,6 +582,7 @@ Future<void> _create(BuildContext context, SupplyState state) async {
                         tankId = null;
                       }),
                     ),
+                    const SizedBox(height: 16),
                     if (tanks.isEmpty)
                       const Text('لا يوجد خزان لهذا النوع من الوقود.', style: TextStyle(color: AppColors.error))
                     else
@@ -490,12 +595,15 @@ Future<void> _create(BuildContext context, SupplyState state) async {
                         ],
                         onChanged: (value) => setLocal(() => tankId = value),
                       ),
+                    const SizedBox(height: 16),
                     TextField(
                       key: const Key('supply-liters'),
                       controller: liters,
                       decoration: const InputDecoration(labelText: 'الكمية المطلوبة (لتر)'),
                     ),
+                    const SizedBox(height: 16),
                     TextField(controller: expected, decoration: const InputDecoration(labelText: 'تاريخ التسليم المتوقع')),
+                    const SizedBox(height: 16),
                     TextField(controller: notes, decoration: const InputDecoration(labelText: 'ملاحظات إضافية')),
                   ],
                 ),

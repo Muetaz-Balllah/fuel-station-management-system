@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response
 from pydantic import BaseModel
 from sqlmodel import Session
 
@@ -10,6 +10,9 @@ from assets.services import (
     create_nozzle,
     create_pump,
     create_tank,
+    delete_nozzle,
+    delete_pump,
+    delete_tank,
     list_events,
     list_pumps,
     list_tanks,
@@ -147,6 +150,36 @@ def patch_nozzle(
     session: Session = Depends(get_session),
 ) -> dict:
     return update_nozzle(session, user, nozzle_id, payload)
+
+
+@router.delete("/tanks/{tank_id}", status_code=204)
+def remove_tank(
+    tank_id: uuid.UUID,
+    user: User = Depends(require_permission("assets.manage")),
+    session: Session = Depends(get_session),
+) -> Response:
+    delete_tank(session, user, tank_id)
+    return Response(status_code=204)
+
+
+@router.delete("/pumps/{pump_id}", status_code=204)
+def remove_pump(
+    pump_id: uuid.UUID,
+    user: User = Depends(require_permission("assets.manage")),
+    session: Session = Depends(get_session),
+) -> Response:
+    delete_pump(session, user, pump_id)
+    return Response(status_code=204)
+
+
+@router.delete("/nozzles/{nozzle_id}", status_code=204)
+def remove_nozzle(
+    nozzle_id: uuid.UUID,
+    user: User = Depends(require_permission("assets.manage")),
+    session: Session = Depends(get_session),
+) -> Response:
+    delete_nozzle(session, user, nozzle_id)
+    return Response(status_code=204)
 
 
 @router.get("/assets/board")

@@ -37,6 +37,7 @@ class UserPublic(BaseModel):
     permissions: list[str]
     is_maintenance: bool
     is_active: bool
+    photo_url: str | None = None
     last_login_at: datetime | None
 
 

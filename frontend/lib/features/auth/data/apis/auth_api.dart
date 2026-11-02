@@ -1,4 +1,6 @@
 import 'package:dio/dio.dart';
+import 'package:frontend/core/networking/upload_file.dart';
+import 'package:frontend/features/auth/data/models/auth_user.dart';
 import 'package:frontend/features/auth/data/models/token_pair.dart';
 
 class AuthApi {
@@ -35,6 +37,14 @@ class AuthApi {
       '/api/v1/auth/logout',
       data: {'refresh_token': refreshToken},
     );
+  }
+
+  Future<AuthUser> uploadPhoto({required List<int> bytes, required String filename}) async {
+    final response = await _dio.post(
+      '/api/v1/auth/me/photo',
+      data: FormData.fromMap({'file': imagePart(bytes, filename)}),
+    );
+    return AuthUser.fromJson(response.data as Map<String, dynamic>);
   }
 
   Future<void> changePassword({

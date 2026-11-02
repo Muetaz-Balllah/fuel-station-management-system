@@ -1,18 +1,26 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:frontend/core/di/injection.dart';
+import 'package:frontend/core/widgets/notification_bell.dart';
+import 'package:frontend/features/dashboard/data/repos/dashboard_repository.dart';
+import 'package:frontend/features/dashboard/logic/cubit/notification_cubit.dart';
+import 'package:dio/dio.dart';
+import 'package:frontend/core/widgets/stored_image.dart';
+import 'package:frontend/features/auth/data/repos/auth_repository.dart';
 import 'package:frontend/features/auth/logic/cubit/session_cubit.dart';
 import 'package:frontend/features/shifts/data/repos/shift_repository.dart';
 import 'package:frontend/features/shifts/logic/cubit/duty_cubit.dart';
 import 'package:frontend/features/shifts/ui/duty_screen.dart';
 
 class OperatorShell extends StatefulWidget {
-  const OperatorShell({super.key, this.cubit});
+  const OperatorShell({super.key, this.cubit, this.notifications});
 
   final DutyCubit? cubit;
+  final NotificationCubit? notifications;
 
   @override
   State<OperatorShell> createState() => _OperatorShellState();
@@ -20,18 +28,32 @@ class OperatorShell extends StatefulWidget {
 
 class _OperatorShellState extends State<OperatorShell> {
   late final DutyCubit _cubit;
+  late final NotificationCubit _notifications;
   late final bool _ownsCubit;
+  late final bool _ownsNotifications;
   int _tab = 0;
   Uint8List? _photo;
+  Timer? _refreshTimer;
 
   @override
   void initState() {
     super.initState();
     _ownsCubit = widget.cubit == null;
+    if (widget.notifications != null) {
+      _notifications = widget.notifications!;
+      _ownsNotifications = false;
+    } else if (getIt.isRegistered<NotificationCubit>()) {
+      _notifications = getIt<NotificationCubit>();
+      _ownsNotifications = false;
+    } else {
+      _notifications = NotificationCubit(DashboardRepository(Dio()));
+      _ownsNotifications = true;
+    }
     if (widget.cubit != null) {
       _cubit = widget.cubit!;
     } else {
       _cubit = DutyCubit(getIt<ShiftRepository>())..load();
+      _refreshTimer = Timer.periodic(const Duration(seconds: 20), (_) => _cubit.load());
     }
   }
 
@@ -42,12 +64,29 @@ class _OperatorShellState extends State<OperatorShell> {
       return;
     }
     setState(() => _photo = bytes);
+    try {
+      final user = await getIt<AuthGateway>().uploadPhoto(bytes: bytes, filename: result!.files.single.name);
+      if (!mounted) {
+        return;
+      }
+      context.read<SessionCubit>().signedIn(user);
+      setState(() => _photo = null);
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تعذر حفظ الصورة. حاول مرة أخرى.')));
+    }
   }
 
   @override
   void dispose() {
+    _refreshTimer?.cancel();
     if (_ownsCubit) {
       _cubit.close();
+    }
+    if (_ownsNotifications) {
+      _notifications.close();
     }
     super.dispose();
   }
@@ -70,15 +109,17 @@ class _OperatorShellState extends State<OperatorShell> {
                 color: Colors.white,
                 border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0))),
               ),
-              child: wide ? _DesktopHeader(user: user, photo: _photo, onPhoto: _pickPhoto) : _PhoneHeader(user: user, photo: _photo, onPhoto: _pickPhoto),
+              child: wide
+                  ? _DesktopHeader(user: user, photo: _photo, onPhoto: _pickPhoto, notifications: _notifications)
+                  : _PhoneHeader(user: user, photo: _photo, notifications: _notifications),
             ),
             Expanded(
               child: IndexedStack(
                 index: wide ? 0 : _tab,
                 children: [
-                  DutyView(photo: _photo, onShowHistory: () => setState(() => _tab = 1)),
+                  DutyView(photo: _photo, photoUrl: user?.photoUrl, onShowHistory: () => setState(() => _tab = 1)),
                   const HistoryList(),
-                  AccountPane(photo: _photo, onPickPhoto: _pickPhoto),
+                  AccountPane(photo: _photo, photoUrl: user?.photoUrl, onPickPhoto: _pickPhoto),
                 ],
               ),
             ),
@@ -115,12 +156,23 @@ class _OperatorShellState extends State<OperatorShell> {
   }
 }
 
+ImageProvider<Object>? _avatarImage(Uint8List? bytes, String? url) {
+  if (bytes != null) {
+    return MemoryImage(bytes);
+  }
+  final resolved = mediaUrl(url);
+  if (resolved == null) {
+    return null;
+  }
+  return NetworkImage(resolved);
+}
+
 class _PhoneHeader extends StatelessWidget {
-  const _PhoneHeader({required this.user, required this.photo, required this.onPhoto});
+  const _PhoneHeader({required this.user, required this.photo, required this.notifications});
 
   final dynamic user;
   final Uint8List? photo;
-  final VoidCallback onPhoto;
+  final NotificationCubit notifications;
 
   @override
   Widget build(BuildContext context) {
@@ -145,16 +197,12 @@ class _PhoneHeader extends StatelessWidget {
             ],
           ),
         ),
-        const Icon(Icons.notifications_none, color: Color(0xFFBA1A1A)),
-        const SizedBox(width: 8),
-        InkWell(
-          onTap: onPhoto,
-          child: CircleAvatar(
-            radius: 16,
-            backgroundColor: const Color(0xFF041539),
-            backgroundImage: photo == null ? null : MemoryImage(photo!),
-            child: photo == null ? const Icon(Icons.person, color: Colors.white, size: 16) : null,
-          ),
+        NotificationBell(cubit: notifications),
+        CircleAvatar(
+          radius: 16,
+          backgroundColor: const Color(0xFF041539),
+          backgroundImage: _avatarImage(photo, user?.photoUrl),
+          child: photo == null && mediaUrl(user?.photoUrl) == null ? const Icon(Icons.person, color: Colors.white, size: 16) : null,
         ),
       ],
     );
@@ -162,11 +210,17 @@ class _PhoneHeader extends StatelessWidget {
 }
 
 class _DesktopHeader extends StatelessWidget {
-  const _DesktopHeader({required this.user, required this.photo, required this.onPhoto});
+  const _DesktopHeader({
+    required this.user,
+    required this.photo,
+    required this.onPhoto,
+    required this.notifications,
+  });
 
   final dynamic user;
   final Uint8List? photo;
   final VoidCallback onPhoto;
+  final NotificationCubit notifications;
 
   @override
   Widget build(BuildContext context) {
@@ -193,13 +247,14 @@ class _DesktopHeader extends StatelessWidget {
             ],
           ),
         ),
+        NotificationBell(cubit: notifications),
         InkWell(
           onTap: onPhoto,
           child: CircleAvatar(
             radius: 16,
             backgroundColor: const Color(0xFF0F172A),
-            backgroundImage: photo == null ? null : MemoryImage(photo!),
-            child: photo == null ? const Icon(Icons.person, color: Colors.white, size: 16) : null,
+            backgroundImage: _avatarImage(photo, user?.photoUrl),
+            child: photo == null && mediaUrl(user?.photoUrl) == null ? const Icon(Icons.person, color: Colors.white, size: 16) : null,
           ),
         ),
         const SizedBox(width: 8),

@@ -14,6 +14,7 @@ class StaffPublic(BaseModel):
     role_name_ar: str
     is_active: bool
     is_maintenance: bool
+    photo_url: str | None = None
     last_login_at: datetime | None
 
 

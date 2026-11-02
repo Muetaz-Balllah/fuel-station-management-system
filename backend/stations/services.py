@@ -74,20 +74,8 @@ def update_station(session: Session, user: User, payload: StationUpdate) -> Stat
 
 
 def save_logo(session: Session, user: User, upload: UploadFile) -> Station:
-    ext = _logo_extension(upload)
-    data = upload.file.read(_MAX_LOGO_BYTES + 1)
-    if not data:
-        raise AppError("VALIDATION_ERROR", "ملف الشعار فارغ.", 422)
-    if len(data) > _MAX_LOGO_BYTES:
-        raise AppError("VALIDATION_ERROR", "حجم الشعار يجب ألا يتجاوز 2 ميغابايت.", 422)
     station = get_for_user(session, user)
-    folder = Path("uploads")
-    folder.mkdir(parents=True, exist_ok=True)
-    for old in folder.glob(f"{station.id}.*"):
-        old.unlink(missing_ok=True)
-    filename = f"{station.id}{ext}"
-    (folder / filename).write_bytes(data)
-    station.logo_url = f"/uploads/{filename}"
+    station.logo_url = store_image(upload, str(station.id))
     station.updated_at = utcnow()
     session.add(station)
     write_audit(
@@ -101,6 +89,33 @@ def save_logo(session: Session, user: User, upload: UploadFile) -> Station:
     session.commit()
     session.refresh(station)
     return station
+
+
+def store_image(upload: UploadFile, stem: str) -> str:
+    """Persist an uploaded image and return a cache-busted public path."""
+    data = upload.file.read(_MAX_LOGO_BYTES + 1)
+    if not data:
+        raise AppError("VALIDATION_ERROR", "ملف الصورة فارغ.", 422)
+    if len(data) > _MAX_LOGO_BYTES:
+        raise AppError("VALIDATION_ERROR", "حجم الصورة يجب ألا يتجاوز 2 ميغابايت.", 422)
+    ext = _image_extension(data, upload)
+    folder = Path("uploads")
+    folder.mkdir(parents=True, exist_ok=True)
+    for old in folder.glob(f"{stem}.*"):
+        old.unlink(missing_ok=True)
+    filename = f"{stem}{ext}"
+    (folder / filename).write_bytes(data)
+    return f"/uploads/{filename}?v={int(utcnow().timestamp())}"
+
+
+def _image_extension(data: bytes, upload: UploadFile) -> str:
+    if data.startswith(b"\x89PNG\r\n\x1a\n"):
+        return ".png"
+    if data.startswith(b"\xff\xd8\xff"):
+        return ".jpg"
+    if len(data) >= 12 and data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return ".webp"
+    return _logo_extension(upload)
 
 
 def _logo_extension(upload: UploadFile) -> str:

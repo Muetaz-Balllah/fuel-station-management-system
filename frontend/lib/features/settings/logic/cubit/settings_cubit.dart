@@ -104,13 +104,15 @@ class SettingsCubit extends Cubit<SettingsState> {
     }
   }
 
-  Future<void> uploadLogo(String path, String filename) async {
+  Future<bool> uploadLogo({required List<int> bytes, required String filename}) async {
     emit(state.copyWith(loading: true, clearError: true));
     try {
-      final station = await _repository.uploadLogo(path, filename);
+      final station = await _repository.uploadLogo(bytes: bytes, filename: filename);
       emit(state.copyWith(loading: false, station: station));
+      return true;
     } on ApiException catch (error) {
       emit(state.copyWith(loading: false, error: error.message));
+      return false;
     }
   }
 
@@ -129,6 +131,14 @@ class SettingsCubit extends Cubit<SettingsState> {
   Future<bool> createUser(Map<String, dynamic> body) async {
     return _run(() async {
       await _repository.createUser(body);
+      final users = await _repository.fetchUsers(search: state.userQuery, role: state.roleFilter);
+      emit(state.copyWith(loading: false, users: users));
+    });
+  }
+
+  Future<bool> uploadUserPhoto({required String userId, required List<int> bytes, required String filename}) {
+    return _run(() async {
+      await _repository.uploadUserPhoto(userId: userId, bytes: bytes, filename: filename);
       final users = await _repository.fetchUsers(search: state.userQuery, role: state.roleFilter);
       emit(state.copyWith(loading: false, users: users));
     });
@@ -182,6 +192,18 @@ class SettingsCubit extends Cubit<SettingsState> {
       final templates = await _repository.fetchTemplates();
       emit(state.copyWith(loading: false, templates: templates));
     });
+  }
+
+  Future<String?> deleteTemplate(String id) async {
+    emit(state.copyWith(clearError: true));
+    try {
+      await _repository.deleteTemplate(id);
+      final templates = await _repository.fetchTemplates();
+      emit(state.copyWith(templates: templates));
+      return null;
+    } on ApiException catch (error) {
+      return error.message;
+    }
   }
 
   Future<bool> _run(Future<void> Function() action) async {

@@ -12,7 +12,6 @@ import 'package:frontend/features/assets/ui/assets_screen.dart';
 import 'package:frontend/features/attendance/ui/attendance_screen.dart';
 import 'package:frontend/features/auth/ui/login_screen.dart';
 import 'package:frontend/features/settings/ui/settings_screen.dart';
-import 'package:frontend/features/shifts/ui/shift_log_screen.dart';
 import 'package:frontend/features/supply/ui/supply_screen.dart';
 import 'package:go_router/go_router.dart';
 
@@ -50,6 +49,9 @@ GoRouter buildRouter() {
       if (user.isOperator) {
         return location.startsWith('/operator') ? null : '/operator';
       }
+      if (location.startsWith('/manager/shifts')) {
+        return '/manager/attendance';
+      }
       return location.startsWith('/manager') ? null : '/manager';
     },
     routes: [
@@ -77,10 +79,6 @@ GoRouter buildRouter() {
               GoRoute(
                 path: 'attendance',
                 builder: (context, state) => const AttendanceScreen(),
-              ),
-              GoRoute(
-                path: 'shifts',
-                builder: (context, state) => const ShiftLogScreen(),
               ),
               GoRoute(
                 path: 'settings',

@@ -72,6 +72,20 @@ def require_permission(code: str):
     return checker
 
 
+def require_any_permission(*codes: str):
+    def checker(request: Request, user: User = Depends(get_current_user)) -> User:
+        granted = getattr(request.state, "permissions", ())
+        if not any(code in granted for code in codes):
+            raise AppError(
+                "FORBIDDEN",
+                "ليست لديك صلاحية لتنفيذ هذا الإجراء.",
+                403,
+            )
+        return user
+
+    return checker
+
+
 def require_role(code: str):
     def checker(request: Request, user: User = Depends(get_current_user)) -> User:
         if getattr(request.state, "role_code", "") != code:

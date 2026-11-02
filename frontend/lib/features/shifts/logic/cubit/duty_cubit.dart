@@ -15,7 +15,12 @@ class DutyState {
     this.duty,
     this.nozzles = const [],
     this.history = const [],
-    this.historyExpanded = false,
+    this.historyPage = 1,
+    this.historyTotal = 0,
+    this.historyPageSize = 10,
+    this.selfService = false,
+    this.shifts = const [],
+    this.identityName = '',
   });
 
   final bool loaded;
@@ -28,7 +33,19 @@ class DutyState {
   final DutyRecord? duty;
   final List<AssignedNozzle> nozzles;
   final List<DutyRecord> history;
-  final bool historyExpanded;
+  final int historyPage;
+  final int historyTotal;
+  final int historyPageSize;
+  final bool selfService;
+  final List<ClaimableShift> shifts;
+  final String identityName;
+
+  int get historyPageCount {
+    if (historyPageSize <= 0) {
+      return 1;
+    }
+    return (historyTotal + historyPageSize - 1) ~/ historyPageSize;
+  }
 
   DutyState copyWith({
     bool? loaded,
@@ -44,7 +61,13 @@ class DutyState {
     bool clearDuty = false,
     List<AssignedNozzle>? nozzles,
     List<DutyRecord>? history,
-    bool? historyExpanded,
+    int? historyPage,
+    int? historyTotal,
+    int? historyPageSize,
+    bool? selfService,
+    List<ClaimableShift>? shifts,
+    String? identityName,
+    bool clearSession = false,
   }) {
     return DutyState(
       loaded: loaded ?? this.loaded,
@@ -52,12 +75,17 @@ class DutyState {
       error: clearError ? null : error ?? this.error,
       reason: clearReason ? reason : reason ?? this.reason,
       canOpen: canOpen ?? this.canOpen,
-      sessionId: sessionId ?? this.sessionId,
+      sessionId: clearSession ? sessionId : sessionId ?? this.sessionId,
       templateName: templateName ?? this.templateName,
       duty: clearDuty ? null : duty ?? this.duty,
       nozzles: nozzles ?? this.nozzles,
       history: history ?? this.history,
-      historyExpanded: historyExpanded ?? this.historyExpanded,
+      historyPage: historyPage ?? this.historyPage,
+      historyTotal: historyTotal ?? this.historyTotal,
+      historyPageSize: historyPageSize ?? this.historyPageSize,
+      selfService: selfService ?? this.selfService,
+      shifts: shifts ?? this.shifts,
+      identityName: identityName ?? this.identityName,
     );
   }
 }
@@ -67,11 +95,12 @@ class DutyCubit extends Cubit<DutyState> {
 
   final ShiftRepository _repository;
 
-  Future<void> load() async {
+  Future<void> load({int? historyPage}) async {
+    final page = historyPage ?? state.historyPage;
     emit(state.copyWith(busy: state.duty == null && !state.loaded, clearError: true));
     try {
       final assignment = await _repository.fetchAssignment();
-      final history = await _repository.fetchMine();
+      final history = await _repository.fetchMine(page: page, pageSize: state.historyPageSize);
       emit(
         state.copyWith(
           loaded: true,
@@ -79,12 +108,19 @@ class DutyCubit extends Cubit<DutyState> {
           clearReason: true,
           reason: assignment.reason,
           canOpen: assignment.canOpen,
+          clearSession: true,
           sessionId: assignment.sessionId,
           templateName: assignment.templateName,
           duty: assignment.duty,
           clearDuty: assignment.duty == null,
           nozzles: assignment.nozzles,
-          history: history,
+          history: history.items,
+          historyPage: history.page,
+          historyTotal: history.total,
+          historyPageSize: history.pageSize,
+          selfService: assignment.selfService,
+          shifts: assignment.shifts,
+          identityName: assignment.identityName,
         ),
       );
     } on ApiException catch (error) {
@@ -92,16 +128,28 @@ class DutyCubit extends Cubit<DutyState> {
     }
   }
 
-  Future<bool> openAssigned() async {
-    final sessionId = state.sessionId;
-    final nozzles = state.nozzles.where((item) => item.selectable).toList();
-    if (sessionId == null || nozzles.isEmpty) {
-      emit(state.copyWith(error: state.reason ?? 'لا يمكن فتح الوردية.'));
-      return false;
+  Future<void> loadHistoryPage(int page) => load(historyPage: page);
+
+  Future<bool> openClaim({
+    String? sessionId,
+    String? templateId,
+    required List<AssignedNozzle> nozzles,
+  }) {
+    if (nozzles.isEmpty || ((sessionId == null || sessionId.isEmpty) && (templateId == null || templateId.isEmpty))) {
+      emit(state.copyWith(error: 'اختر الوردية والمضخات التي ستتسلمها.'));
+      return Future.value(false);
     }
+    return _open(sessionId: sessionId, templateId: templateId, nozzles: nozzles);
+  }
+
+  Future<bool> _open({
+    String? sessionId,
+    String? templateId,
+    required List<AssignedNozzle> nozzles,
+  }) async {
     emit(state.copyWith(busy: true, clearError: true));
     try {
-      await _repository.openDuty(sessionId: sessionId, nozzles: nozzles);
+      await _repository.openDuty(sessionId: sessionId, templateId: templateId, nozzles: nozzles);
       await load();
       return true;
     } on ApiException catch (error) {
@@ -125,6 +173,4 @@ class DutyCubit extends Cubit<DutyState> {
       return null;
     }
   }
-
-  void showHistory() => emit(state.copyWith(historyExpanded: true));
 }

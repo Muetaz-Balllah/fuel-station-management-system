@@ -260,8 +260,8 @@ def test_absent_and_foreign_nozzle_cannot_open(client):
     present = _login(client, "duty.present")
     other = _yard(client, token, "PUMP-OTHER", ["50.000"])
     foreign = _open(client, present, shift["id"], other["nozzles"])
-    assert foreign.status_code == 409
-    assert foreign.json()["code"] == "NOT_ASSIGNED"
+    assert foreign.status_code == 201, foreign.text
+    assert foreign.json()["status"] == "open"
 
 
 def test_meter_mismatch_needs_override_and_a_reason(client):
@@ -372,3 +372,42 @@ def test_operator_cannot_approve(client):
     assert opened.status_code == 201, opened.text
     denied = client.post(f"/api/v1/duties/{opened.json()['id']}/approve", headers=auth_header(operator))
     assert denied.status_code == 403
+
+
+def test_operator_opens_a_shift_without_a_prior_assignment(client):
+    token, _ = _manager(client)
+    yard = _yard(client, token, "PUMP-FREE", ["900.000"])
+    _user(client, token, "فني حر", "duty.free")
+    shift = _session(client, token, "2026-11-12")
+    operator = _login(client, "duty.free")
+    opened = _open(client, operator, shift["id"], yard["nozzles"])
+    assert opened.status_code == 201, opened.text
+    body = opened.json()
+    assert body["full_name"] == "فني حر"
+    assert body["taken_over"] is False
+    rows = client.get(f"/api/v1/sessions/{shift['id']}/attendance", headers=auth_header(token)).json()["items"]
+    assert rows[0]["note"] == "فتح الموظف الوردية بنفسه"
+    assert rows[0]["assignments"]
+
+
+def test_operator_takeover_is_visible_to_the_manager(client):
+    token, _ = _manager(client)
+    yard = _yard(client, token, "PUMP-TAKE", ["4000.000"])
+    rostered_id = _user(client, token, "سالم المكلّف", "duty.roster")
+    taker_id = _user(client, token, "ليلى المناوبة", "duty.taker")
+    shift = _session(client, token, "2026-11-13")
+    nozzle = yard["nozzles"][0]
+    _assign(client, token, shift["id"], rostered_id, [nozzle["id"]])
+    taker = _login(client, "duty.taker")
+    opened = _open(client, taker, shift["id"], [nozzle])
+    assert opened.status_code == 201, opened.text
+    body = opened.json()
+    assert body["full_name"] == "ليلى المناوبة"
+    assert body["rostered_name"] == "سالم المكلّف"
+    assert body["taken_over"] is True
+    rows = client.get(f"/api/v1/sessions/{shift['id']}/attendance", headers=auth_header(token)).json()["items"]
+    taker_row = next(item for item in rows if item["user_id"] == taker_id)
+    assert "سالم المكلّف" in (taker_row["note"] or "")
+    log = client.get("/api/v1/shift-log?date_from=2026-11-13&date_to=2026-11-13", headers=auth_header(token))
+    assert log.status_code == 200
+    assert "ليلى المناوبة بدل سالم المكلّف" in log.json()["items"][0]["operators"]

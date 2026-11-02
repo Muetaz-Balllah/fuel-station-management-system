@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel
 from sqlmodel import Session
 
@@ -26,7 +26,8 @@ class OpenNozzle(BaseModel):
 
 
 class OpenDuty(BaseModel):
-    session_id: str
+    session_id: str | None = None
+    template_id: str | None = None
     nozzles: list[OpenNozzle]
     reason: str | None = None
 
@@ -111,21 +112,23 @@ def post_reject(
 
 @router.get("/me/duties")
 def read_mine(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=100),
     user: User = Depends(require_permission("shifts.operate")),
     session: Session = Depends(get_session),
 ) -> dict:
-    items = my_duties(session, user)
-    return {"items": items, "total": len(items)}
+    return my_duties(session, user, page=page, page_size=page_size)
 
 
 @router.get("/sessions/{session_id}/duties")
 def read_session_duties(
     session_id: str,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=100),
     user: User = Depends(require_permission("shifts.view_all")),
     session: Session = Depends(get_session),
 ) -> dict:
-    items = session_duties(session, user, session_id)
-    return {"items": items, "total": len(items)}
+    return session_duties(session, user, session_id, page=page, page_size=page_size)
 
 
 @router.get("/shift-log")
@@ -133,8 +136,9 @@ def read_log(
     date_from: str | None = None,
     date_to: str | None = None,
     status: str | None = None,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=100),
     user: User = Depends(require_permission("shifts.view_all")),
     session: Session = Depends(get_session),
 ) -> dict:
-    items = shift_log(session, user, date_from, date_to, status)
-    return {"items": items, "total": len(items)}
+    return shift_log(session, user, date_from, date_to, status, page=page, page_size=page_size)

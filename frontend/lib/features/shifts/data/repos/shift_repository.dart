@@ -103,6 +103,16 @@ class ShiftRepository {
     });
   }
 
+  Future<PagedList<DutyRecord>> fetchDutiesByDate(String date, {int page = 1, int pageSize = 10}) {
+    return _guard(() async {
+      final response = await _dio.get(
+        '/api/v1/duties/by-date',
+        queryParameters: {'date': date, 'page': page, 'page_size': pageSize},
+      );
+      return PagedList.fromJson(response.data as Map<String, dynamic>, DutyRecord.fromJson);
+    });
+  }
+
   Future<PagedList<DutyRecord>> fetchSessionDuties(String sessionId, {int page = 1, int pageSize = 10}) {
     return _guard(() async {
       final response = await _dio.get(

@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:frontend/core/di/injection.dart';
+import 'package:frontend/core/layout/responsive_layout.dart';
 import 'package:frontend/core/theming/app_colors.dart';
 import 'package:frontend/features/assets/data/models/asset_models.dart';
 import 'package:frontend/features/assets/data/repos/assets_repository.dart';
@@ -73,34 +74,50 @@ class AssetsView extends StatelessWidget {
       child: RefreshIndicator(
         onRefresh: () => context.read<AssetsCubit>().load(),
         child: ListView(
-          padding: const EdgeInsets.all(24),
+          padding: managerPagePadding(context),
           children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Expanded(
-                  child: Align(
-                    alignment: Alignment.centerRight,
-                    child: Text(
-                      'مراقبة حية لمستويات الوقود — خزان مستقل 1:1 لكل مضخة',
-                      textAlign: TextAlign.right,
-                      style: TextStyle(color: AppColors.onSurfaceVariant),
-                    ),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                const subtitle = Align(
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    'مراقبة حية لمستويات الوقود — خزان مستقل 1:1 لكل مضخة',
+                    textAlign: TextAlign.right,
+                    style: TextStyle(color: AppColors.onSurfaceVariant),
                   ),
-                ),
-                const SizedBox(width: 12),
-                OutlinedButton.icon(
-                  onPressed: board == null ? null : () => _addPump(context, board),
-                  icon: const Icon(Icons.add),
-                  label: const Text('إضافة مضخة'),
-                ),
-                const SizedBox(width: 8),
-                FilledButton.icon(
-                  onPressed: board == null ? null : () => _addTank(context, board),
-                  icon: const Icon(Icons.storage),
-                  label: const Text('إضافة خزان جديد'),
-                ),
-              ],
+                );
+                final actions = Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  alignment: WrapAlignment.end,
+                  children: [
+                    OutlinedButton.icon(
+                      onPressed: board == null ? null : () => _addPump(context, board),
+                      icon: const Icon(Icons.add),
+                      label: const Text('إضافة مضخة'),
+                    ),
+                    FilledButton.icon(
+                      onPressed: board == null ? null : () => _addTank(context, board),
+                      icon: const Icon(Icons.storage),
+                      label: const Text('إضافة خزان جديد'),
+                    ),
+                  ],
+                );
+                if (constraints.maxWidth < 640) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [subtitle, const SizedBox(height: 12), actions],
+                  );
+                }
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Expanded(child: subtitle),
+                    const SizedBox(width: 12),
+                    actions,
+                  ],
+                );
+              },
             ),
             if (state.error != null)
               Padding(

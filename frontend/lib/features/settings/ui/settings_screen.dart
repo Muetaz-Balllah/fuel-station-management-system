@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:frontend/core/di/injection.dart';
+import 'package:frontend/core/layout/responsive_layout.dart';
 import 'package:frontend/core/widgets/stored_image.dart';
 import 'package:frontend/core/theming/app_colors.dart';
 import 'package:frontend/features/auth/data/repos/auth_repository.dart';
@@ -94,7 +95,7 @@ class _StationTab extends StatelessWidget {
       return const Center(child: CircularProgressIndicator());
     }
     return ListView(
-      padding: const EdgeInsets.all(24),
+      padding: managerPagePadding(context),
       children: [
         _StationForm(station: station),
         const SizedBox(height: 28),
@@ -362,25 +363,24 @@ class _UsersTabState extends State<_UsersTab> {
 
   @override
   Widget build(BuildContext context) {
+    final pagePad = managerPagePadding(context);
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
-          child: Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _search,
-                  decoration: const InputDecoration(
-                    labelText: 'بحث',
-                    hintText: 'الاسم أو اسم المستخدم',
-                  ),
-                  onSubmitted: (value) => context.read<SettingsCubit>().applyUserFilter(search: value),
+          padding: pagePad.copyWith(top: 16, bottom: 8),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final search = TextField(
+                controller: _search,
+                decoration: const InputDecoration(
+                  labelText: 'بحث',
+                  hintText: 'الاسم أو اسم المستخدم',
                 ),
-              ),
-              const SizedBox(width: 12),
-              DropdownButton<String>(
+                onSubmitted: (value) => context.read<SettingsCubit>().applyUserFilter(search: value),
+              );
+              final roleFilter = DropdownButton<String>(
                 value: widget.state.roleFilter,
+                isExpanded: constraints.maxWidth < 720,
                 items: const [
                   DropdownMenuItem(value: 'all', child: Text('الجميع')),
                   DropdownMenuItem(value: 'station_manager', child: Text('مدير المحطة')),
@@ -391,21 +391,41 @@ class _UsersTabState extends State<_UsersTab> {
                     context.read<SettingsCubit>().applyUserFilter(role: value);
                   }
                 },
-              ),
-              const SizedBox(width: 12),
-              FilledButton.icon(
+              );
+              final addUser = FilledButton.icon(
                 onPressed: () => _editUser(context, null),
                 icon: const Icon(Icons.person_add_alt),
                 label: const Text('إضافة مستخدم جديد'),
-              ),
-            ],
+              );
+              if (constraints.maxWidth < 720) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    search,
+                    const SizedBox(height: 12),
+                    roleFilter,
+                    const SizedBox(height: 12),
+                    addUser,
+                  ],
+                );
+              }
+              return Row(
+                children: [
+                  Expanded(child: search),
+                  const SizedBox(width: 12),
+                  roleFilter,
+                  const SizedBox(width: 12),
+                  addUser,
+                ],
+              );
+            },
           ),
         ),
         Expanded(
           child: widget.state.users.isEmpty
               ? const Center(child: Text('لا يوجد مستخدمون مطابقون.'))
               : ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+                  padding: pagePad.copyWith(top: 8),
                   itemCount: widget.state.users.length,
                   separatorBuilder: (_, _) => const Divider(height: 1),
                   itemBuilder: (context, index) {
@@ -587,7 +607,7 @@ class _AccountTab extends StatelessWidget {
     final session = context.watch<SessionCubit>().state;
     final user = session is SessionSignedIn ? session.user : null;
     return ListView(
-      padding: const EdgeInsets.all(24),
+      padding: managerPagePadding(context),
       children: [
         const Text('إعدادات الحساب', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.primary)),
         const SizedBox(height: 8),

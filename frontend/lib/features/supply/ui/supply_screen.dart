@@ -4,10 +4,12 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:frontend/core/di/injection.dart';
+import 'package:frontend/core/layout/responsive_layout.dart';
 import 'package:frontend/core/theming/app_colors.dart';
 import 'package:frontend/features/shifts/logic/reconcile.dart';
 import 'package:frontend/features/supply/data/models/supply_models.dart';
 import 'package:frontend/features/supply/data/repos/supply_repository.dart';
+import 'package:frontend/core/widgets/horizontal_data_table.dart';
 import 'package:frontend/core/widgets/pagination_bar.dart';
 import 'package:frontend/core/widgets/stored_image.dart';
 import 'package:frontend/features/supply/logic/cubit/supply_cubit.dart';
@@ -90,18 +92,28 @@ class _SupplyViewState extends State<SupplyView> {
     return ColoredBox(
       color: AppColors.background,
       child: ListView(
-        padding: const EdgeInsets.all(24),
+        padding: managerPagePadding(context),
         children: [
           const SizedBox(height: 4),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: [
-              _Counter(title: 'اجمالي الطلبات النشطة', value: '${state.activeOrders}'),
-              _Counter(title: 'قيد الانتظار', value: '${state.pendingOrders}'),
-              _Counter(title: 'الكمية الموردة (لتر)', value: _compact(state.deliveredLiters)),
-              _Counter(title: 'الموردين النشطين', value: '${state.activeSuppliers}'),
-            ],
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final wideCards = constraints.maxWidth >= 440;
+              final cardWidth = wideCards ? 200.0 : constraints.maxWidth;
+              Widget counter(String title, String value) => SizedBox(
+                    width: cardWidth,
+                    child: _Counter(title: title, value: value),
+                  );
+              return Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  counter('اجمالي الطلبات النشطة', '${state.activeOrders}'),
+                  counter('قيد الانتظار', '${state.pendingOrders}'),
+                  counter('الكمية الموردة (لتر)', _compact(state.deliveredLiters)),
+                  counter('الموردين النشطين', '${state.activeSuppliers}'),
+                ],
+              );
+            },
           ),
           if (state.error != null)
             Padding(
@@ -199,7 +211,7 @@ class _Counter extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 200,
+      width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -249,7 +261,16 @@ class _OrdersPanel extends StatelessWidget {
           if (orders.isEmpty)
             const Text('لا توجد طلبات توريد.')
           else
-            for (final order in orders) _OrderRow(order: order),
+            HorizontalDataTable(
+              minWidth: _SupplyOrderTable.minWidth,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const _SupplyOrderTableHeader(),
+                  for (final order in orders) _OrderRow(order: order),
+                ],
+              ),
+            ),
           PaginationBar(page: page, pageCount: pageCount, total: total, onPage: onPage),
         ],
       ),
@@ -314,6 +335,42 @@ class _SupplierColumn extends StatelessWidget {
   }
 }
 
+abstract final class _SupplyOrderTable {
+  /// Column widths plus horizontal row padding (12 + 12).
+  static const minWidth = 884.0;
+  static const code = 100.0;
+  static const supplier = 160.0;
+  static const product = 150.0;
+  static const liters = 90.0;
+  static const status = 110.0;
+  static const expected = 100.0;
+  static const actions = 150.0;
+}
+
+class _SupplyOrderTableHeader extends StatelessWidget {
+  const _SupplyOrderTableHeader();
+
+  @override
+  Widget build(BuildContext context) {
+    const style = TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 12);
+    return Container(
+      color: AppColors.primary,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      child: const Row(
+        children: [
+          SizedBox(width: _SupplyOrderTable.code, child: Text('رقم الطلب', style: style)),
+          SizedBox(width: _SupplyOrderTable.supplier, child: Text('المورد', style: style)),
+          SizedBox(width: _SupplyOrderTable.product, child: Text('المنتج', style: style)),
+          SizedBox(width: _SupplyOrderTable.liters, child: Text('الكمية', style: style)),
+          SizedBox(width: _SupplyOrderTable.status, child: Text('الحالة', style: style)),
+          SizedBox(width: _SupplyOrderTable.expected, child: Text('التوريد المتوقع', style: style)),
+          SizedBox(width: _SupplyOrderTable.actions, child: Text('إجراءات', style: style)),
+        ],
+      ),
+    );
+  }
+}
+
 class _OrderRow extends StatelessWidget {
   const _OrderRow({required this.order});
 
@@ -332,31 +389,57 @@ class _OrderRow extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 4),
       child: Row(
         children: [
-          SizedBox(width: 110, child: Text('#${order.code}')),
-          Expanded(child: Text(order.supplierName)),
-          Expanded(child: Text(order.productName)),
-          SizedBox(width: 90, child: Text(_compact(order.orderedLiters))),
           SizedBox(
-            width: 110,
+            width: _SupplyOrderTable.code,
+            child: Text('#${order.code}', maxLines: 1, overflow: TextOverflow.ellipsis),
+          ),
+          SizedBox(
+            width: _SupplyOrderTable.supplier,
+            child: Text(order.supplierName, maxLines: 2, overflow: TextOverflow.ellipsis),
+          ),
+          SizedBox(
+            width: _SupplyOrderTable.product,
+            child: Text(order.productName, maxLines: 2, overflow: TextOverflow.ellipsis),
+          ),
+          SizedBox(
+            width: _SupplyOrderTable.liters,
+            child: Text(_compact(order.orderedLiters), maxLines: 1, overflow: TextOverflow.ellipsis),
+          ),
+          SizedBox(
+            width: _SupplyOrderTable.status,
             child: Text(
               order.statusLabel,
               key: Key('order-status-${order.id}'),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(color: color, fontWeight: FontWeight.w700),
             ),
           ),
-          SizedBox(width: 100, child: Text(order.expectedOn)),
-          if (order.status == 'pending') ...[
-            TextButton(
-              key: Key('order-receive-${order.id}'),
-              onPressed: () => context.read<SupplyCubit>().receive(order.id),
-              child: const Text('استلام'),
-            ),
-            TextButton(
-              key: Key('order-cancel-${order.id}'),
-              onPressed: () => context.read<SupplyCubit>().cancel(order.id),
-              child: const Text('إلغاء'),
-            ),
-          ],
+          SizedBox(
+            width: _SupplyOrderTable.expected,
+            child: Text(order.expectedOn, maxLines: 1, overflow: TextOverflow.ellipsis),
+          ),
+          SizedBox(
+            width: _SupplyOrderTable.actions,
+            child: order.status == 'pending'
+                ? Wrap(
+                    spacing: 4,
+                    runSpacing: 0,
+                    children: [
+                      TextButton(
+                        key: Key('order-receive-${order.id}'),
+                        onPressed: () => context.read<SupplyCubit>().receive(order.id),
+                        child: const Text('استلام'),
+                      ),
+                      TextButton(
+                        key: Key('order-cancel-${order.id}'),
+                        onPressed: () => context.read<SupplyCubit>().cancel(order.id),
+                        child: const Text('إلغاء'),
+                      ),
+                    ],
+                  )
+                : const SizedBox.shrink(),
+          ),
         ],
       ),
     );

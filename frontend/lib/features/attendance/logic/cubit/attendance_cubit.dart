@@ -1,5 +1,7 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:frontend/core/models/paged_list.dart';
 import 'package:frontend/core/networking/api_exception.dart';
+import 'package:frontend/core/time/system_clock.dart';
 import 'package:frontend/features/attendance/data/models/attendance_models.dart';
 import 'package:frontend/features/attendance/data/repos/attendance_repository.dart';
 import 'package:frontend/features/shifts/data/models/shift_models.dart';
@@ -10,6 +12,7 @@ class AttendanceState {
     this.loading = false,
     this.error,
     this.date = '',
+    this.serverToday = '',
     this.sessionId,
     this.templateId,
     this.templates = const [],
@@ -28,6 +31,7 @@ class AttendanceState {
   final bool loading;
   final String? error;
   final String date;
+  final String serverToday;
   final String? sessionId;
   final String? templateId;
   final List<AttendanceTemplateOption> templates;
@@ -50,6 +54,7 @@ class AttendanceState {
     String? error,
     bool clearError = false,
     String? date,
+    String? serverToday,
     String? sessionId,
     String? templateId,
     List<AttendanceTemplateOption>? templates,
@@ -68,6 +73,7 @@ class AttendanceState {
       loading: loading ?? this.loading,
       error: clearError ? null : error ?? this.error,
       date: date ?? this.date,
+      serverToday: serverToday ?? this.serverToday,
       sessionId: sessionId ?? this.sessionId,
       templateId: templateId ?? this.templateId,
       templates: templates ?? this.templates,
@@ -100,14 +106,23 @@ class AttendanceCubit extends Cubit<AttendanceState> {
     int? dutiesPage,
     bool silent = false,
   }) async {
-    final day = date ?? state.date;
-    emit(state.copyWith(loading: !silent && state.summary == null, clearError: true, date: day));
+    if (!silent || state.serverToday.isEmpty) {
+      try {
+        await _repository.syncClock();
+      } on ApiException {
+        // Keep the last synced clock when offline.
+      }
+    }
+    final serverToday = SystemClock.todayIso();
+    final day = date ?? (state.date.isEmpty ? serverToday : state.date);
+    emit(state.copyWith(loading: !silent && state.summary == null, clearError: true, date: day, serverToday: serverToday));
     try {
       final options = await _repository.fetchOptions();
       final daySessions = day.isEmpty ? const <AttendanceSessionOption>[] : await _repository.fetchSessions(day);
+      final sessionHint = _sessionForDay(daySessions, sessionId ?? state.sessionId);
       final chosenSession = _pickSession(
         daySessions,
-        sessionId: sessionId ?? state.sessionId,
+        sessionId: sessionHint,
         templateId: templateId ?? state.templateId ?? _morningTemplate(options.templates)?.id,
       );
       String? activeSessionId = chosenSession?.status == 'cancelled' ? null : chosenSession?.id;
@@ -121,7 +136,7 @@ class AttendanceCubit extends Cubit<AttendanceState> {
       }
       if (activeSessionId == null) {
         final template = templateId ?? state.templateId ?? _morningTemplate(options.templates)?.id;
-        if (template != null && day.isNotEmpty) {
+        if (template != null && day.isNotEmpty && day == serverToday) {
           try {
             activeSessionId = await _repository.openSession(templateId: template, date: day);
           } on ApiException {
@@ -131,17 +146,36 @@ class AttendanceCubit extends Cubit<AttendanceState> {
       }
       final attPage = attendancePage ?? state.attendancePage;
       final dutyPage = dutiesPage ?? state.dutiesPage;
-      final attendance = activeSessionId == null
-          ? null
-          : await _repository.fetchAttendance(activeSessionId, page: attPage, pageSize: 10);
-      final dutyList = activeSessionId == null
-          ? null
-          : await _shifts.fetchSessionDuties(activeSessionId, page: dutyPage, pageSize: 10);
-      final summary = day.isEmpty ? null : await _repository.fetchSummary(day);
+      PagedList<AttendanceRow>? attendance;
+      if (activeSessionId != null && _sessionForDay(daySessions, activeSessionId) != null) {
+        try {
+          attendance = await _repository.fetchAttendance(activeSessionId, page: attPage, pageSize: 10);
+        } on ApiException {
+          attendance = null;
+          activeSessionId = null;
+        }
+      }
+      var duties = const <DutyRecord>[];
+      var dutiesPageNo = dutyPage;
+      var dutiesTotalCount = 0;
+      var summary = day.isEmpty ? null : await _repository.fetchSummary(day);
+      if (day.isNotEmpty) {
+        try {
+          final dutyList = await _shifts.fetchDutiesByDate(day, page: dutyPage, pageSize: 10);
+          duties = dutyList.items;
+          dutiesPageNo = dutyList.page;
+          dutiesTotalCount = dutyList.total;
+        } on ApiException catch (error) {
+          emit(state.copyWith(loading: false, error: error.message));
+          return;
+        }
+      }
       emit(
         state.copyWith(
           loading: false,
+          clearError: true,
           date: day,
+          serverToday: serverToday,
           sessionId: activeSessionId,
           templateId: chosenSession?.templateId ?? templateId ?? state.templateId,
           templates: options.templates,
@@ -151,9 +185,9 @@ class AttendanceCubit extends Cubit<AttendanceState> {
           rows: attendance?.items ?? const [],
           attendancePage: attendance?.page ?? 1,
           attendanceTotal: attendance?.total ?? 0,
-          sessionDuties: dutyList?.items ?? const [],
-          dutiesPage: dutyList?.page ?? 1,
-          dutiesTotal: dutyList?.total ?? 0,
+          sessionDuties: duties,
+          dutiesPage: dutiesPageNo,
+          dutiesTotal: dutiesTotalCount,
           summary: summary,
         ),
       );
@@ -162,11 +196,48 @@ class AttendanceCubit extends Cubit<AttendanceState> {
     }
   }
 
+  String? _sessionForDay(List<AttendanceSessionOption> sessions, String? sessionId) {
+    if (sessionId == null) {
+      return null;
+    }
+    for (final item in sessions) {
+      if (item.id == sessionId) {
+        return sessionId;
+      }
+    }
+    return null;
+  }
+
   Future<void> selectSession(String sessionId) => load(sessionId: sessionId, attendancePage: 1, dutiesPage: 1, silent: true);
 
   Future<void> setAttendancePage(int page) => load(attendancePage: page, silent: true);
 
   Future<void> setDutiesPage(int page) => load(dutiesPage: page, silent: true);
+
+  Future<void> goToPreviousDay() {
+    if (state.date.isEmpty) {
+      return load();
+    }
+    return load(
+      date: SystemClock.shiftIsoDate(state.date, -1),
+      sessionId: null,
+      attendancePage: 1,
+      dutiesPage: 1,
+    );
+  }
+
+  Future<void> goToNextDay() {
+    if (state.date.isEmpty) {
+      return load();
+    }
+    final next = SystemClock.shiftIsoDate(state.date, 1);
+    if (next.compareTo(state.serverToday.isEmpty ? SystemClock.todayIso() : state.serverToday) > 0) {
+      return Future.value();
+    }
+    return load(date: next, sessionId: null, attendancePage: 1, dutiesPage: 1);
+  }
+
+  Future<void> pickDate(String iso) => load(date: iso, sessionId: null, attendancePage: 1, dutiesPage: 1);
 
   Future<String?> approveDuty(String dutyId) => _dutyAction(() => _shifts.approve(dutyId));
 

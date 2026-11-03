@@ -28,6 +28,9 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+
+        // i added this
+        minSdk = 23
     }
 
     buildTypes {

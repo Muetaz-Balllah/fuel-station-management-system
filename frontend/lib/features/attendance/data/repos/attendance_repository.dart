@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:frontend/core/models/paged_list.dart';
 import 'package:frontend/core/networking/api_client.dart';
+import 'package:frontend/core/time/system_clock.dart';
 import 'package:frontend/features/attendance/data/models/attendance_models.dart';
 
 class AttendanceOptions {
@@ -15,6 +16,10 @@ class AttendanceRepository {
   AttendanceRepository(this._dio);
 
   final Dio _dio;
+
+  Future<void> syncClock() {
+    return _guard(() => SystemClock.sync(_dio));
+  }
 
   Future<AttendanceOptions> fetchOptions() {
     return _guard(() async {

@@ -214,6 +214,10 @@ class ClaimableShift {
     required this.sessionId,
     required this.window,
     required this.rosteredName,
+    required this.claimable,
+    required this.sessionStatus,
+    required this.statusLabel,
+    required this.blockReason,
   });
 
   final String templateId;
@@ -221,6 +225,10 @@ class ClaimableShift {
   final String? sessionId;
   final String window;
   final String? rosteredName;
+  final bool claimable;
+  final String? sessionStatus;
+  final String statusLabel;
+  final String? blockReason;
 
   factory ClaimableShift.fromJson(Map<String, dynamic> json) {
     return ClaimableShift(
@@ -229,6 +237,10 @@ class ClaimableShift {
       sessionId: json['session_id'] as String?,
       window: json['window'] as String? ?? '',
       rosteredName: json['rostered_name'] as String?,
+      claimable: json['claimable'] as bool? ?? true,
+      sessionStatus: json['session_status'] as String?,
+      statusLabel: json['status_label'] as String? ?? '',
+      blockReason: json['block_reason'] as String?,
     );
   }
 }

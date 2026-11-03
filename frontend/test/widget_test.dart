@@ -76,6 +76,10 @@ void main() {
   });
 
   testWidgets('manager shell shows the dashboard placeholder', (tester) async {
+    tester.view.physicalSize = const Size(1280, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
     final session = SessionCubit(_FakeGateway())..signedIn(_manager);
     await tester.pumpWidget(
       BlocProvider.value(
@@ -89,6 +93,26 @@ void main() {
     expect(find.text('الخزانات والمضخات'), findsOneWidget);
     expect(find.text('الحضور والورديات'), findsOneWidget);
     expect(find.text('التوريدات والموردين'), findsOneWidget);
+    expect(find.text('طلب تزويد جديد'), findsOneWidget);
+  });
+
+  testWidgets('manager shell uses drawer navigation on narrow screens', (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final session = SessionCubit(_FakeGateway())..signedIn(_manager);
+    await tester.pumpWidget(
+      BlocProvider.value(
+        value: session,
+        child: MaterialApp(theme: AppTheme.light(), home: const ManagerShell()),
+      ),
+    );
+    expect(find.byIcon(Icons.menu), findsOneWidget);
+    expect(find.text('لوحة القيادة'), findsNothing);
+    await tester.tap(find.byIcon(Icons.menu));
+    await tester.pumpAndSettle();
+    expect(find.text('لوحة القيادة'), findsOneWidget);
     expect(find.text('طلب تزويد جديد'), findsOneWidget);
   });
 
@@ -376,7 +400,7 @@ void main() {
     expect(lateText.data, '08:45');
     expect(lateText.style?.color, AppColors.error);
     expect(find.text('3 / 6'), findsOneWidget);
-    expect(find.text('سجل الورديات والاعتماد'), findsNothing);
+    expect(find.byKey(const Key('attendance-duty-approval')), findsOneWidget);
     expect(find.byKey(const Key('attendance-export')), findsOneWidget);
     final csv = attendanceCsv(rows);
     expect(csv, contains('محمد'));

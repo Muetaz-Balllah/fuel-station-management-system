@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:frontend/core/theming/app_colors.dart';
+import 'package:frontend/core/time/system_clock.dart';
 import 'package:frontend/core/widgets/stored_image.dart';
 import 'package:frontend/features/auth/logic/cubit/session_cubit.dart';
 import 'package:frontend/features/shifts/data/models/shift_models.dart';
@@ -94,7 +95,7 @@ class _DesktopMetaRowState extends State<_DesktopMetaRow> {
 
   @override
   Widget build(BuildContext context) {
-    final now = DateTime.now();
+    final now = SystemClock.nowUtc().toLocal();
     final date = '${now.day}/${now.month}/${now.year}';
     final time = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}';
     return Padding(
@@ -511,6 +512,128 @@ class _MobileHistoryPreview extends StatelessWidget {
   }
 }
 
+class _ShiftOptionTile extends StatelessWidget {
+  const _ShiftOptionTile({
+    required this.shift,
+    this.compact = false,
+    this.selectedTemplateId,
+    this.onSelect,
+  });
+
+  final ClaimableShift shift;
+  final bool compact;
+  final String? selectedTemplateId;
+  final VoidCallback? onSelect;
+
+  bool get selected => selectedTemplateId == shift.templateId;
+
+  @override
+  Widget build(BuildContext context) {
+    final closed = !shift.claimable;
+    final bg = selected
+        ? const Color(0xFFF0F3FF)
+        : closed
+            ? const Color(0xFFFFF7ED)
+            : const Color(0xFFF8FAFC);
+    final border = selected
+        ? AppColors.primary
+        : closed
+            ? const Color(0xFFFDBA74)
+            : const Color(0xFFE2E8F0);
+    return Padding(
+      padding: EdgeInsets.only(bottom: compact ? 6 : 8),
+      child: Material(
+        color: bg,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          onTap: onSelect,
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: border),
+            ),
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (!compact)
+                  Radio<String>(
+                    value: shift.templateId,
+                    groupValue: selectedTemplateId,
+                    onChanged: onSelect == null ? null : (_) => onSelect!(),
+                  )
+                else if (closed)
+                  const Padding(
+                    padding: EdgeInsets.only(left: 4, top: 2),
+                    child: Icon(Icons.lock_outline, size: 18, color: AppColors.warning),
+                  )
+                else
+                  const Padding(
+                    padding: EdgeInsets.only(left: 4, top: 2),
+                    child: Icon(Icons.check_circle_outline, size: 18, color: AppColors.success),
+                  ),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              shift.window.isEmpty ? shift.templateName : shift.window,
+                              style: TextStyle(
+                                fontWeight: FontWeight.w700,
+                                color: closed ? AppColors.onSurfaceVariant : AppColors.onSurface,
+                              ),
+                            ),
+                          ),
+                          if (shift.statusLabel.isNotEmpty)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: closed ? const Color(0xFFFFFBEB) : const Color(0xFFE7EEFF),
+                                borderRadius: BorderRadius.circular(99),
+                              ),
+                              child: Text(
+                                shift.statusLabel,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: closed ? AppColors.warning : AppColors.primary,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                      if (shift.rosteredName != null && shift.rosteredName!.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(
+                            'تكليف أولي: ${shift.rosteredName}',
+                            style: const TextStyle(fontSize: 12, color: AppColors.onSurfaceVariant),
+                          ),
+                        ),
+                      if (closed && (shift.blockReason ?? '').isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 6),
+                          child: Text(
+                            shift.blockReason!,
+                            style: const TextStyle(fontSize: 12, color: AppColors.error, height: 1.4),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _OpenCard extends StatelessWidget {
   const _OpenCard({required this.state});
 
@@ -520,7 +643,8 @@ class _OpenCard extends StatelessWidget {
     if (state.busy || state.duty != null) {
       return false;
     }
-    return state.canOpen && state.shifts.isNotEmpty && state.nozzles.any((item) => item.selectable);
+    final hasClaimable = state.shifts.any((item) => item.claimable);
+    return state.canOpen && hasClaimable && state.nozzles.any((item) => item.selectable);
   }
 
   @override
@@ -540,6 +664,12 @@ class _OpenCard extends StatelessWidget {
               padding: const EdgeInsets.only(top: 8),
               child: Text(state.reason ?? 'لا توجد وردية متاحة للفتح الآن.'),
             ),
+          if (state.shifts.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            const Text('ورديات اليوم', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+            const SizedBox(height: 8),
+            for (final item in state.shifts) _ShiftOptionTile(shift: item, compact: true),
+          ],
           const SizedBox(height: 12),
           FilledButton(
             key: const Key('duty-open'),
@@ -574,6 +704,14 @@ Future<void> _showOpenShiftPicker(BuildContext context, DutyState state) async {
           final shift = state.shifts.where((item) => item.templateId == templateId).firstOrNull;
           final pumps = _nozzlesByPump(state.nozzles);
           void chooseShift(String? value) {
+            if (value == null) {
+              setLocal(() => templateId = null);
+              return;
+            }
+            final picked = state.shifts.where((item) => item.templateId == value).firstOrNull;
+            if (picked == null || !picked.claimable) {
+              return;
+            }
             setLocal(() {
               templateId = value;
               selectedNozzles
@@ -624,38 +762,13 @@ Future<void> _showOpenShiftPicker(BuildContext context, DutyState state) async {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            const Text('الورديات المتاحة', style: TextStyle(fontWeight: FontWeight.w700)),
+                            const Text('جميع ورديات اليوم', style: TextStyle(fontWeight: FontWeight.w700)),
                             const SizedBox(height: 8),
                             for (final item in state.shifts)
-                              Material(
-                                color: templateId == item.templateId ? const Color(0xFFF0F3FF) : const Color(0xFFF8FAFC),
-                                borderRadius: BorderRadius.circular(12),
-                                child: InkWell(
-                                  borderRadius: BorderRadius.circular(12),
-                                  onTap: () => chooseShift(item.templateId),
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(12),
-                                    child: Row(
-                                      children: [
-                                        Radio<String>(
-                                          value: item.templateId,
-                                          groupValue: templateId,
-                                          onChanged: chooseShift,
-                                        ),
-                                        Expanded(
-                                          child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            children: [
-                                              Text(item.window.isEmpty ? item.templateName : item.window, style: const TextStyle(fontWeight: FontWeight.w700)),
-                                              if (item.rosteredName != null && item.rosteredName!.isNotEmpty)
-                                                Text('تكليف أولي: ${item.rosteredName}', style: const TextStyle(fontSize: 12, color: AppColors.onSurfaceVariant)),
-                                            ],
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
+                              _ShiftOptionTile(
+                                shift: item,
+                                selectedTemplateId: templateId,
+                                onSelect: item.claimable ? () => chooseShift(item.templateId) : null,
                               ),
                             const SizedBox(height: 16),
                             if (shift == null)
@@ -1414,7 +1527,7 @@ class ScheduleBoard extends StatelessWidget {
     final session = context.watch<SessionCubit>().state;
     final name = session is SessionSignedIn ? session.user.fullName : '';
     final shifts = ShiftRoster.timetable();
-    final today = DateTime.now();
+    final today = SystemClock.nowUtc();
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -1639,7 +1752,7 @@ class _ElapsedState extends State<_Elapsed> {
     if (opened == null) {
       return const SizedBox.shrink();
     }
-    final elapsed = DateTime.now().toUtc().difference(opened.toUtc());
+    final elapsed = SystemClock.nowUtc().difference(opened.toUtc());
     final hours = elapsed.inHours.toString().padLeft(2, '0');
     final minutes = elapsed.inMinutes.remainder(60).toString().padLeft(2, '0');
     final seconds = elapsed.inSeconds.remainder(60).toString().padLeft(2, '0');

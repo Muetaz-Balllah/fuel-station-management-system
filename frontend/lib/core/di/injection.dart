@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:frontend/core/networking/api_client.dart';
+import 'package:frontend/core/time/system_clock.dart';
 import 'package:frontend/features/assets/data/repos/assets_repository.dart';
 import 'package:frontend/features/dashboard/data/repos/dashboard_repository.dart';
 import 'package:frontend/features/dashboard/logic/cubit/notification_cubit.dart';
@@ -43,4 +44,11 @@ Future<void> setupDependencies() async {
   getIt.registerSingleton<NotificationCubit>(NotificationCubit(getIt()));
   getIt.registerSingleton<SessionCubit>(SessionCubit(getIt()));
   await getIt<SessionCubit>().restore();
+  if (tokens.access != null && tokens.access!.isNotEmpty) {
+    try {
+      await SystemClock.sync(dio);
+    } catch (_) {
+      // Offline startup; attendance will retry sync on load.
+    }
+  }
 }

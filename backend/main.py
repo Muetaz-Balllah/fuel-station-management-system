@@ -21,6 +21,7 @@ from errors import AppError
 from stations.catalog_routes import products_router, templates_router
 from stations.routes import router as station_router
 from users.routes import router as users_router
+from system.routes import router as system_router
 
 
 @asynccontextmanager
@@ -97,6 +98,7 @@ def create_app() -> FastAPI:
     app.include_router(shifts_router, prefix="/api/v1")
     app.include_router(supply_router, prefix="/api/v1")
     app.include_router(dashboard_router, prefix="/api/v1")
+    app.include_router(system_router, prefix="/api/v1")
     Path("uploads").mkdir(parents=True, exist_ok=True)
     app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
     return app

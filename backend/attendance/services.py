@@ -159,7 +159,35 @@ def set_session_availability(session: Session, user: User, template_id: str, bus
     return _session_public(session, shift)
 
 
+def sweep_expired_sessions(session: Session, station_id: uuid.UUID) -> None:
+    now = utcnow()
+    rows = session.exec(
+        select(ShiftSession).where(
+            ShiftSession.station_id == station_id,
+            ShiftSession.status == "open",
+            ShiftSession.ends_at < now,
+        )
+    ).all()
+    changed = False
+    for shift in rows:
+        busy = session.exec(
+            select(ShiftDuty).where(
+                ShiftDuty.session_id == shift.id,
+                ShiftDuty.status.in_(["open", "pending_approval", "rejected"]),  # type: ignore[attr-defined]
+            )
+        ).first()
+        if busy is not None:
+            continue
+        shift.status = "closed"
+        shift.updated_at = utcnow()
+        session.add(shift)
+        changed = True
+    if changed:
+        session.commit()
+
+
 def list_sessions(session: Session, user: User, business_date: date | None) -> list[dict]:
+    sweep_expired_sessions(session, user.station_id)
     statement = select(ShiftSession).where(ShiftSession.station_id == user.station_id)
     if business_date is not None:
         statement = statement.where(ShiftSession.business_date == business_date)

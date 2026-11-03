@@ -23,9 +23,6 @@ class DutyApprovalPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (duties.isEmpty) {
-      return const SizedBox.shrink();
-    }
     final pending = duties.where((item) => item.status == 'pending_approval').toList();
     final others = duties.where((item) => item.status != 'pending_approval').toList();
     return Column(
@@ -38,6 +35,20 @@ class DutyApprovalPanel extends StatelessWidget {
           style: TextStyle(fontSize: 12, color: AppColors.onSurfaceVariant, height: 1.5),
         ),
         const SizedBox(height: 12),
+        if (duties.isEmpty)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.outlineVariant),
+            ),
+            child: const Text(
+              'لا توجد سجلات إغلاق أو اعتمادات لهذا اليوم. انتقل لتاريخ آخر أو انتظر إرسال المشغّلين لمحاضرهم.',
+              style: TextStyle(color: AppColors.onSurfaceVariant, height: 1.5),
+            ),
+          ),
         if (pending.isNotEmpty) ...[
           const Text('بانتظار اعتماد المشرف', style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.warning)),
           const SizedBox(height: 8),

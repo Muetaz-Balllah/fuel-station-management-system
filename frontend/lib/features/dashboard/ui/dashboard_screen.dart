@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:frontend/core/di/injection.dart';
+import 'package:frontend/core/layout/responsive_layout.dart';
+import 'package:frontend/core/time/system_clock.dart';
 import 'package:frontend/core/theming/app_colors.dart';
 import 'package:frontend/features/dashboard/data/models/dashboard_models.dart';
 import 'package:frontend/features/dashboard/data/repos/dashboard_repository.dart';
@@ -48,7 +50,7 @@ class DashboardView extends StatelessWidget {
       );
     }
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
+      padding: managerPagePadding(context),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -102,7 +104,21 @@ class DashboardView extends StatelessWidget {
                 ),
                 if (state.alert != null) _AlertCard(alert: state.alert!),
               ];
-              final columns = constraints.maxWidth < 760 ? 2 : cards.length;
+              final columns = constraints.maxWidth < 420
+                  ? 1
+                  : constraints.maxWidth < 760
+                      ? 2
+                      : cards.length;
+              if (columns == 1) {
+                return Column(
+                  children: [
+                    for (var index = 0; index < cards.length; index++) ...[
+                      if (index > 0) const SizedBox(height: 12),
+                      cards[index],
+                    ],
+                  ],
+                );
+              }
               return Column(
                 children: [
                   for (var start = 0; start < cards.length; start += columns) ...[
@@ -110,14 +126,14 @@ class DashboardView extends StatelessWidget {
                     SizedBox(
                       height: 220,
                       child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        for (var index = start; index < start + columns && index < cards.length; index++) ...[
-                          if (index > start) const SizedBox(width: 12),
-                          Expanded(child: cards[index]),
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          for (var index = start; index < start + columns && index < cards.length; index++) ...[
+                            if (index > start) const SizedBox(width: 12),
+                            Expanded(child: cards[index]),
+                          ],
                         ],
-                      ],
-                    ),
+                      ),
                     ),
                   ],
                 ],
@@ -157,12 +173,13 @@ class DashboardView extends StatelessWidget {
   }
 
   Future<void> _pickDate(BuildContext context, String current) async {
-    final initial = DateTime.tryParse(current) ?? DateTime.now();
+    final serverToday = DateTime.tryParse(SystemClock.todayIso()) ?? SystemClock.nowUtc();
+    final initial = DateTime.tryParse(current) ?? serverToday;
     final picked = await showDatePicker(
       context: context,
       initialDate: initial,
       firstDate: DateTime(2020),
-      lastDate: DateTime(2100),
+      lastDate: serverToday,
     );
     if (picked == null || !context.mounted) {
       return;
@@ -375,21 +392,33 @@ class _ShiftSummary extends StatelessWidget {
           Container(
             color: AppColors.primary,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            child: Row(
-              children: [
-                const Icon(Icons.table_chart, color: Colors.white),
-                const SizedBox(width: 8),
-                const Expanded(
-                  child: Text(
-                    'سجل ملخص ومطابقة الورديات اليومية',
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 16),
-                  ),
-                ),
-                TextButton(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final stacked = constraints.maxWidth < 520;
+                final titleRow = Row(
+                  children: [
+                    const Icon(Icons.table_chart, color: Colors.white),
+                    const SizedBox(width: 8),
+                    const Expanded(
+                      child: Text(
+                        'سجل ملخص ومطابقة الورديات اليومية',
+                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 16),
+                      ),
+                    ),
+                  ],
+                );
+                final link = TextButton(
                   onPressed: () => GoRouter.maybeOf(context)?.go('/manager/attendance'),
                   child: const Text('سجل كافة الورديات', style: TextStyle(color: Colors.white)),
-                ),
-              ],
+                );
+                if (stacked) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [titleRow, Align(alignment: Alignment.centerLeft, child: link)],
+                  );
+                }
+                return Row(children: [Expanded(child: titleRow), link]);
+              },
             ),
           ),
           if (sessions.isEmpty)
@@ -398,58 +427,70 @@ class _ShiftSummary extends StatelessWidget {
               child: Text('لا توجد ورديات في هذا اليوم', key: Key('dashboard-empty')),
             )
           else
-            Table(
-              columnWidths: const {
-                0: FlexColumnWidth(1.2),
-                1: FlexColumnWidth(1.6),
-                2: FlexColumnWidth(1.3),
-                3: FlexColumnWidth(1.2),
-                4: FlexColumnWidth(1.1),
-                5: FlexColumnWidth(1.3),
-                6: FlexColumnWidth(1.2),
-              },
-              defaultVerticalAlignment: TableCellVerticalAlignment.middle,
-              children: [
-                const TableRow(
-                  decoration: BoxDecoration(color: Color(0xFFF0F3FF)),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                const minTableWidth = 880.0;
+                final table = Table(
+                  columnWidths: const {
+                    0: FlexColumnWidth(1.2),
+                    1: FlexColumnWidth(1.6),
+                    2: FlexColumnWidth(1.3),
+                    3: FlexColumnWidth(1.2),
+                    4: FlexColumnWidth(1.1),
+                    5: FlexColumnWidth(1.3),
+                    6: FlexColumnWidth(1.2),
+                  },
+                  defaultVerticalAlignment: TableCellVerticalAlignment.middle,
                   children: [
-                    _HeadCell('رقم الوردية'),
-                    _HeadCell('الفترة / الوردية'),
-                    _HeadCell('مشرف الوردية'),
-                    _HeadCell('إجمالي اللترات المباعة'),
-                    _HeadCell('إجمالي الإيراد'),
-                    _HeadCell('الفائض / العجز'),
-                    _HeadCell('حالة الوردية'),
+                    const TableRow(
+                      decoration: BoxDecoration(color: Color(0xFFF0F3FF)),
+                      children: [
+                        _HeadCell('رقم الوردية'),
+                        _HeadCell('الفترة / الوردية'),
+                        _HeadCell('مشرف الوردية'),
+                        _HeadCell('إجمالي اللترات المباعة'),
+                        _HeadCell('إجمالي الإيراد'),
+                        _HeadCell('الفائض / العجز'),
+                        _HeadCell('حالة الوردية'),
+                      ],
+                    ),
+                    for (final row in sessions)
+                      TableRow(
+                        children: [
+                          _BodyCell(Text(row.code, style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.primary))),
+                          _BodyCell(Text(row.window)),
+                          _BodyCell(
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(row.supervisor.isEmpty ? '—' : row.supervisor),
+                                if (row.operators.isNotEmpty)
+                                  Text(row.operators, style: const TextStyle(fontSize: 11, color: AppColors.onSurfaceVariant)),
+                              ],
+                            ),
+                          ),
+                          _BodyCell(Text(row.liters ?? '—')),
+                          _BodyCell(Text(row.revenue ?? '—')),
+                          _BodyCell(
+                            Text(
+                              row.varianceLabel ?? '—',
+                              key: Key('dashboard-variance-${row.id}'),
+                              style: TextStyle(color: _varianceColor(row.varianceLabel), fontWeight: FontWeight.w700),
+                            ),
+                          ),
+                          _BodyCell(Text(row.statusLabel)),
+                        ],
+                      ),
                   ],
-                ),
-                for (final row in sessions)
-                  TableRow(
-                    children: [
-                      _BodyCell(Text(row.code, style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.primary))),
-                      _BodyCell(Text(row.window)),
-                      _BodyCell(
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(row.supervisor.isEmpty ? '—' : row.supervisor),
-                            if (row.operators.isNotEmpty)
-                              Text(row.operators, style: const TextStyle(fontSize: 11, color: AppColors.onSurfaceVariant)),
-                          ],
-                        ),
-                      ),
-                      _BodyCell(Text(row.liters ?? '—')),
-                      _BodyCell(Text(row.revenue ?? '—')),
-                      _BodyCell(
-                        Text(
-                          row.varianceLabel ?? '—',
-                          key: Key('dashboard-variance-${row.id}'),
-                          style: TextStyle(color: _varianceColor(row.varianceLabel), fontWeight: FontWeight.w700),
-                        ),
-                      ),
-                      _BodyCell(Text(row.statusLabel)),
-                    ],
-                  ),
-              ],
+                );
+                if (constraints.maxWidth >= minTableWidth) {
+                  return table;
+                }
+                return SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: SizedBox(width: minTableWidth, child: table),
+                );
+              },
             ),
         ],
       ),

@@ -100,45 +100,48 @@ class _OperatorShellState extends State<OperatorShell> {
       value: _cubit,
       child: Scaffold(
         backgroundColor: const Color(0xFFF8FAFC),
-        body: Column(
-          children: [
-            Container(
-              constraints: const BoxConstraints(minHeight: 64),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0))),
-              ),
-              child: wide
-                  ? _DesktopHeader(user: user, photo: _photo, onPhoto: _pickPhoto, notifications: _notifications)
-                  : _PhoneHeader(user: user, photo: _photo, notifications: _notifications),
-            ),
-            Expanded(
-              child: IndexedStack(
-                index: wide ? 0 : _tab,
-                children: [
-                  DutyView(photo: _photo, photoUrl: user?.photoUrl, onShowHistory: () => setState(() => _tab = 1)),
-                  const HistoryList(),
-                  AccountPane(photo: _photo, photoUrl: user?.photoUrl, onPickPhoto: _pickPhoto),
-                ],
-              ),
-            ),
-            if (wide)
+        body: SafeArea(
+          bottom: false,
+          child: Column(
+            children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                constraints: const BoxConstraints(minHeight: 64),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 decoration: const BoxDecoration(
                   color: Colors.white,
-                  border: Border(top: BorderSide(color: Color(0xFFE2E8F0))),
+                  border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0))),
                 ),
-                child: const Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                child: wide
+                    ? _DesktopHeader(user: user, photo: _photo, onPhoto: _pickPhoto, notifications: _notifications)
+                    : _PhoneHeader(user: user, photo: _photo, notifications: _notifications),
+              ),
+              Expanded(
+                child: IndexedStack(
+                  index: wide ? 0 : _tab,
                   children: [
-                    Text('نظام FuelOps Libya — بوابة الموظف', style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
-                    Text('الإصدار التشغيلي 2.4 | متصل بالخادم المركزي', style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
+                    DutyView(photo: _photo, photoUrl: user?.photoUrl, onShowHistory: () => setState(() => _tab = 1)),
+                    const HistoryList(),
+                    AccountPane(photo: _photo, photoUrl: user?.photoUrl, onPickPhoto: _pickPhoto),
                   ],
                 ),
               ),
-          ],
+              if (wide)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    border: Border(top: BorderSide(color: Color(0xFFE2E8F0))),
+                  ),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('نظام FuelOps Libya — بوابة الموظف', style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
+                      Text('الإصدار التشغيلي 2.4 | متصل بالخادم المركزي', style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
+                    ],
+                  ),
+                ),
+            ],
+          ),
         ),
         bottomNavigationBar: wide
             ? null

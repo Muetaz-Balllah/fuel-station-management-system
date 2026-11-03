@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:frontend/core/layout/responsive_layout.dart';
 import 'package:frontend/core/theming/app_colors.dart';
 import 'package:frontend/features/auth/logic/cubit/session_cubit.dart';
 import 'package:frontend/features/dashboard/logic/cubit/notification_cubit.dart';
@@ -7,7 +8,7 @@ import 'package:frontend/core/widgets/notification_bell.dart';
 import 'package:frontend/core/widgets/stored_image.dart';
 import 'package:go_router/go_router.dart';
 
-class ManagerShell extends StatelessWidget {
+class ManagerShell extends StatefulWidget {
   const ManagerShell({super.key, this.child, this.location = '/manager', this.notifications});
 
   final Widget? child;
@@ -15,9 +16,24 @@ class ManagerShell extends StatelessWidget {
   final NotificationCubit? notifications;
 
   @override
+  State<ManagerShell> createState() => _ManagerShellState();
+}
+
+class _ManagerShellState extends State<ManagerShell> {
+  final _scaffoldKey = GlobalKey<ScaffoldState>();
+
+  void _closeDrawerIfOpen() {
+    final scaffold = _scaffoldKey.currentState;
+    if (scaffold != null && scaffold.isDrawerOpen) {
+      Navigator.of(context).pop();
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final state = context.watch<SessionCubit>().state;
     final user = state is SessionSignedIn ? state.user : null;
+    final location = widget.location;
     final assets = location.startsWith('/manager/assets');
     final supply = location.startsWith('/manager/supply');
     final attendance = location.startsWith('/manager/attendance');
@@ -31,124 +47,156 @@ class ManagerShell extends StatelessWidget {
                 : settings
                     ? 'إعدادات النظام'
                     : 'لوحة التحكم';
+    final wide = managerWideLayout(context);
+    final nav = _ManagerNavPanel(
+      assetsSelected: assets,
+      supplySelected: supply,
+      attendanceSelected: attendance,
+      settingsSelected: settings,
+      onNavigate: wide ? null : _closeDrawerIfOpen,
+    );
+    final body = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _TopBar(
+          title: title,
+          name: user?.fullName ?? '',
+          role: user?.roleNameAr ?? '',
+          initials: user?.initials ?? '',
+          photoUrl: user?.photoUrl,
+          notifications: widget.notifications,
+          compact: !wide,
+          onMenu: wide ? null : () => _scaffoldKey.currentState?.openDrawer(),
+        ),
+        Expanded(child: widget.child ?? const SizedBox.shrink()),
+      ],
+    );
+
+    if (wide) {
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        body: SafeArea(
+          bottom: false,
+          child: Row(
+            children: [
+              SizedBox(width: 256, child: nav),
+              Expanded(child: body),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
+      key: _scaffoldKey,
       backgroundColor: AppColors.background,
-      body: Row(
-        children: [
-          _Sidebar(
-            assetsSelected: assets,
-            supplySelected: supply,
-            attendanceSelected: attendance,
-            settingsSelected: settings,
-          ),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _TopBar(
-                  title: title,
-                  name: user?.fullName ?? '',
-                  role: user?.roleNameAr ?? '',
-                  initials: user?.initials ?? '',
-                  photoUrl: user?.photoUrl,
-                  notifications: notifications,
-                ),
-                Expanded(child: child ?? const SizedBox.shrink()),
-              ],
-            ),
-          ),
-        ],
+      drawer: Drawer(
+        width: 288,
+        backgroundColor: AppColors.primary,
+        child: SafeArea(child: nav),
+      ),
+      body: SafeArea(
+        bottom: false,
+        child: body,
       ),
     );
   }
 }
 
-class _Sidebar extends StatelessWidget {
-  const _Sidebar({
+class _ManagerNavPanel extends StatelessWidget {
+  const _ManagerNavPanel({
     required this.assetsSelected,
     required this.supplySelected,
     required this.attendanceSelected,
     required this.settingsSelected,
+    this.onNavigate,
   });
 
   final bool assetsSelected;
   final bool supplySelected;
   final bool attendanceSelected;
   final bool settingsSelected;
+  final VoidCallback? onNavigate;
+
+  void _go(BuildContext context, String path) {
+    onNavigate?.call();
+    GoRouter.maybeOf(context)?.go(path);
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 256,
+    return ColoredBox(
       color: AppColors.primary,
-      padding: const EdgeInsets.symmetric(vertical: 24),
-      child: Column(
-        children: [
-          const Icon(Icons.local_gas_station, color: Colors.white, size: 36),
-          const SizedBox(height: 12),
-          const Text(
-            'إدارة الوقود',
-            style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w700),
-          ),
-          const Text(
-            'ليبيا - نظام الإدارة',
-            style: TextStyle(color: Color(0xFF8392BC), fontSize: 12),
-          ),
-          const SizedBox(height: 16),
-          Expanded(
-            child: SingleChildScrollView(
-              child: Column(
-                children: [
-                _NavButton(
-                  icon: Icons.dashboard,
-                  label: 'لوحة القيادة',
-                  selected: !assetsSelected && !supplySelected && !attendanceSelected && !settingsSelected,
-                  onTap: () => GoRouter.maybeOf(context)?.go('/manager'),
-                ),
-                _NavButton(
-                  icon: Icons.local_gas_station,
-                  label: 'الخزانات والمضخات',
-                  selected: assetsSelected,
-                  onTap: () => GoRouter.maybeOf(context)?.go('/manager/assets'),
-                ),
-                _NavButton(
-                  icon: Icons.local_shipping_outlined,
-                  label: 'التوريدات والموردين',
-                  selected: supplySelected,
-                  onTap: () => GoRouter.maybeOf(context)?.go('/manager/supply'),
-                ),
-                _NavButton(
-            icon: Icons.fact_check_outlined,
-            label: 'الحضور والورديات',
-            selected: attendanceSelected,
-            onTap: () => GoRouter.maybeOf(context)?.go('/manager/attendance'),
-          ),
-                _NavButton(
-                  icon: Icons.settings,
-                  label: 'إعدادات النظام',
-                  selected: settingsSelected,
-                  onTap: () => GoRouter.maybeOf(context)?.go('/manager/settings'),
-                ),
-              ],
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 24),
+        child: Column(
+          children: [
+            const Icon(Icons.local_gas_station, color: Colors.white, size: 36),
+            const SizedBox(height: 12),
+            const Text(
+              'إدارة الوقود',
+              style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w700),
             ),
-          ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            child: SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFFFFDBCC),
-                  foregroundColor: const Color(0xFF7A3000),
+            const Text(
+              'ليبيا - نظام الإدارة',
+              style: TextStyle(color: Color(0xFF8392BC), fontSize: 12),
+            ),
+            const SizedBox(height: 16),
+            Expanded(
+              child: SingleChildScrollView(
+                child: Column(
+                  children: [
+                    _NavButton(
+                      icon: Icons.dashboard,
+                      label: 'لوحة القيادة',
+                      selected: !assetsSelected && !supplySelected && !attendanceSelected && !settingsSelected,
+                      onTap: () => _go(context, '/manager'),
+                    ),
+                    _NavButton(
+                      icon: Icons.local_gas_station,
+                      label: 'الخزانات والمضخات',
+                      selected: assetsSelected,
+                      onTap: () => _go(context, '/manager/assets'),
+                    ),
+                    _NavButton(
+                      icon: Icons.local_shipping_outlined,
+                      label: 'التوريدات والموردين',
+                      selected: supplySelected,
+                      onTap: () => _go(context, '/manager/supply'),
+                    ),
+                    _NavButton(
+                      icon: Icons.fact_check_outlined,
+                      label: 'الحضور والورديات',
+                      selected: attendanceSelected,
+                      onTap: () => _go(context, '/manager/attendance'),
+                    ),
+                    _NavButton(
+                      icon: Icons.settings,
+                      label: 'إعدادات النظام',
+                      selected: settingsSelected,
+                      onTap: () => _go(context, '/manager/settings'),
+                    ),
+                  ],
                 ),
-                onPressed: () => GoRouter.maybeOf(context)?.go('/manager/supply?new=1'),
-                icon: const Icon(Icons.add_circle_outline),
-                label: const Text('طلب تزويد جديد'),
               ),
             ),
-          ),
-        ],
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFFFFDBCC),
+                    foregroundColor: const Color(0xFF7A3000),
+                  ),
+                  onPressed: () => _go(context, '/manager/supply?new=1'),
+                  icon: const Icon(Icons.add_circle_outline),
+                  label: const Text('طلب تزويد جديد'),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -187,7 +235,7 @@ class _NavButton extends StatelessWidget {
                 Expanded(
                   child: Text(
                     label,
-                    maxLines: 1,
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(fontWeight: FontWeight.w600, color: color),
                   ),
@@ -209,6 +257,8 @@ class _TopBar extends StatelessWidget {
     required this.initials,
     required this.photoUrl,
     required this.notifications,
+    required this.compact,
+    this.onMenu,
   });
 
   final String title;
@@ -217,13 +267,57 @@ class _TopBar extends StatelessWidget {
   final String initials;
   final String? photoUrl;
   final NotificationCubit? notifications;
+  final bool compact;
+  final VoidCallback? onMenu;
 
   @override
   Widget build(BuildContext context) {
+    final horizontal = compact ? 12.0 : 24.0;
+    if (compact) {
+      return Container(
+        constraints: const BoxConstraints(minHeight: 56),
+        width: double.infinity,
+        padding: EdgeInsets.symmetric(horizontal: horizontal, vertical: 8),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          border: Border(bottom: BorderSide(color: AppColors.outlineVariant)),
+        ),
+        child: Row(
+          children: [
+            IconButton(
+              visualDensity: VisualDensity.compact,
+              onPressed: onMenu,
+              icon: const Icon(Icons.menu, color: AppColors.primary),
+              tooltip: 'القائمة',
+            ),
+            Expanded(
+              child: Text(
+                title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.right,
+                style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+              ),
+            ),
+            if (notifications != null) NotificationBell(cubit: notifications!),
+            const SizedBox(width: 8),
+            CircleAvatar(
+              radius: 18,
+              backgroundColor: AppColors.primaryContainer,
+              backgroundImage: mediaUrl(photoUrl) == null ? null : NetworkImage(mediaUrl(photoUrl)!),
+              child: mediaUrl(photoUrl) == null
+                  ? Text(initials, style: const TextStyle(color: Colors.white, fontSize: 11))
+                  : null,
+            ),
+          ],
+        ),
+      );
+    }
+
     return Container(
       height: 64,
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 24),
+      padding: EdgeInsets.symmetric(horizontal: horizontal),
       decoration: const BoxDecoration(
         color: Colors.white,
         border: Border(bottom: BorderSide(color: AppColors.outlineVariant)),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:frontend/core/theming/app_colors.dart';
+import 'package:frontend/core/widgets/horizontal_data_table.dart';
 import 'package:frontend/features/shifts/data/models/shift_models.dart';
 import 'package:frontend/features/shifts/logic/duty_format.dart';
 import 'package:frontend/features/shifts/logic/reconcile.dart';
@@ -25,17 +26,9 @@ class DutyCloseReviewBody extends StatelessWidget {
         if (duty.lines.isEmpty)
           const Text('لا توجد قراءات مسجّلة.')
         else
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final table = _LinesTable(lines: duty.lines);
-              if (constraints.maxWidth >= 720) {
-                return table;
-              }
-              return SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: SizedBox(width: 720, child: table),
-              );
-            },
+          HorizontalDataTable(
+            minWidth: _LinesTable.minWidth,
+            child: _LinesTable(lines: duty.lines),
           ),
         const SizedBox(height: 12),
         _TotalsStrip(duty: duty),
@@ -77,55 +70,97 @@ class _MetaStrip extends StatelessWidget {
 class _LinesTable extends StatelessWidget {
   const _LinesTable({required this.lines});
 
+  /// Column widths plus horizontal row padding (8 + 8).
+  static const minWidth = 720.0;
+  static const pump = 72.0;
+  static const nozzle = 168.0;
+  static const opening = 108.0;
+  static const closing = 108.0;
+  static const sold = 88.0;
+  static const price = 72.0;
+  static const amount = 88.0;
+
   final List<DutyLine> lines;
 
   @override
   Widget build(BuildContext context) {
     const header = TextStyle(fontWeight: FontWeight.w700, fontSize: 12);
     const cell = TextStyle(fontSize: 12);
-    return Table(
-      columnWidths: const {
-        0: FlexColumnWidth(1.2),
-        1: FlexColumnWidth(1.4),
-        2: FlexColumnWidth(1.1),
-        3: FlexColumnWidth(1.1),
-        4: FlexColumnWidth(0.9),
-        5: FlexColumnWidth(0.8),
-        6: FlexColumnWidth(0.9),
-      },
-      border: TableBorder.all(color: const Color(0xFFE2E8F0)),
-      children: [
-        const TableRow(
-          decoration: BoxDecoration(color: Color(0xFFF1F5F9)),
-          children: [
-            Padding(padding: EdgeInsets.all(8), child: Text('المضخة', style: header)),
-            Padding(padding: EdgeInsets.all(8), child: Text('المسدس / المنتج', style: header)),
-            Padding(padding: EdgeInsets.all(8), child: Text('افتتاحي', style: header)),
-            Padding(padding: EdgeInsets.all(8), child: Text('ختامي', style: header)),
-            Padding(padding: EdgeInsets.all(8), child: Text('المباع', style: header)),
-            Padding(padding: EdgeInsets.all(8), child: Text('السعر', style: header)),
-            Padding(padding: EdgeInsets.all(8), child: Text('الإيراد', style: header)),
-          ],
-        ),
-        for (final line in lines)
-          TableRow(
-            children: [
-              Padding(padding: const EdgeInsets.all(8), child: Text(line.pumpCode, style: cell)),
-              Padding(
-                padding: const EdgeInsets.all(8),
-                child: Text('${line.nozzleCode} • ${line.productName}\n${line.label}', style: cell),
-              ),
-              Padding(padding: const EdgeInsets.all(8), child: Text(line.openingMeter, style: cell)),
-              Padding(padding: const EdgeInsets.all(8), child: Text(line.closingMeter ?? '—', style: cell)),
-              Padding(
-                padding: const EdgeInsets.all(8),
-                child: Text(line.liters ?? _sold(line.openingMeter, line.closingMeter), style: cell),
-              ),
-              Padding(padding: const EdgeInsets.all(8), child: Text('${line.unitPrice} د.ل', style: cell)),
-              Padding(padding: const EdgeInsets.all(8), child: Text(line.lineAmount ?? '—', style: cell)),
-            ],
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            color: const Color(0xFFF1F5F9),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+            child: const Row(
+              children: [
+                SizedBox(width: pump, child: Text('المضخة', style: header)),
+                SizedBox(width: nozzle, child: Text('المسدس / المنتج', style: header)),
+                SizedBox(width: opening, child: Text('افتتاحي', style: header)),
+                SizedBox(width: closing, child: Text('ختامي', style: header)),
+                SizedBox(width: sold, child: Text('المباع', style: header)),
+                SizedBox(width: price, child: Text('السعر', style: header)),
+                SizedBox(width: amount, child: Text('الإيراد', style: header)),
+              ],
+            ),
           ),
-      ],
+          for (final line in lines)
+            Container(
+              decoration: const BoxDecoration(
+                border: Border(top: BorderSide(color: Color(0xFFE2E8F0))),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    width: pump,
+                    child: Text(line.pumpCode, style: cell, maxLines: 2, overflow: TextOverflow.ellipsis),
+                  ),
+                  SizedBox(
+                    width: nozzle,
+                    child: Text(
+                      '${line.nozzleCode} • ${line.productName}\n${line.label}',
+                      style: cell,
+                      maxLines: 4,
+                      overflow: TextOverflow.ellipsis,
+                      softWrap: true,
+                    ),
+                  ),
+                  SizedBox(
+                    width: opening,
+                    child: Text(line.openingMeter, style: cell, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  ),
+                  SizedBox(
+                    width: closing,
+                    child: Text(line.closingMeter ?? '—', style: cell, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  ),
+                  SizedBox(
+                    width: sold,
+                    child: Text(
+                      line.liters ?? _sold(line.openingMeter, line.closingMeter),
+                      style: cell,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  SizedBox(
+                    width: price,
+                    child: Text('${line.unitPrice} د.ل', style: cell, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  ),
+                  SizedBox(
+                    width: amount,
+                    child: Text(line.lineAmount ?? '—', style: cell, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
     );
   }
 

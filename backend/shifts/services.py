@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from decimal import Decimal
 
 from sqlmodel import Session, select
@@ -32,7 +32,12 @@ _STATUS_LABELS = {
     "approved": "معتمدة",
     "rejected": "مرفوضة",
 }
-_SESSION_LABELS = {"open": "جارية الآن", "approved": "معتمدة ومغلقة", "cancelled": "معطّلة"}
+_SESSION_LABELS = {
+    "open": "جارية الآن",
+    "approved": "معتمدة ومغلقة",
+    "cancelled": "معطّلة",
+    "closed": "منتهية",
+}
 
 
 def my_assignment(session: Session, user: User) -> dict:
@@ -69,17 +74,18 @@ def my_assignment(session: Session, user: User) -> dict:
         body["identity"] = identity
         return body
     attendance, shift = _pick_attendance(session, user, today)
-    shifts = _claimable_shifts(session, user, today)
+    shifts = _operator_shifts(session, user, today)
+    claimable = [item for item in shifts if item["claimable"]]
     nozzles = _station_nozzles(session, user)
     ready = [item for item in nozzles if item["selectable"]]
     reason = None
-    if not shifts:
-        reason = "لا توجد وردية متاحة اليوم."
+    if not claimable:
+        reason = "لا توجد وردية متاحة للفتح الآن." if shifts else "لا توجد ورديات مجدولة لهذا اليوم."
     elif not ready:
         reason = "لا توجد مضخة جاهزة لفتح وردية عليها."
     return {
         "date": today.isoformat(),
-        "can_open": bool(shifts) and bool(ready),
+        "can_open": bool(claimable) and bool(ready),
         "self_service": True,
         "reason": reason,
         "session": _session_brief(session, shift) if shift is not None else None,
@@ -401,6 +407,30 @@ def my_duties(
     rows = session.exec(
         select(ShiftDuty)
         .where(ShiftDuty.user_id == user.id, ShiftDuty.station_id == user.station_id)
+        .order_by(ShiftDuty.opened_at.desc())
+    ).all()
+    items = [_duty_public(session, row) for row in rows]
+    safe_page, safe_size = page_bounds(page, page_size, default_size=10)
+    sliced, total = slice_page(items, safe_page, safe_size)
+    return {"items": sliced, "total": total, "page": safe_page, "page_size": safe_size}
+
+
+def duties_for_business_date(
+    session: Session,
+    user: User,
+    business_date: date,
+    page: int | None = None,
+    page_size: int | None = None,
+) -> dict:
+    from core.pagination import page_bounds, slice_page
+
+    rows = session.exec(
+        select(ShiftDuty)
+        .join(ShiftSession, ShiftSession.id == ShiftDuty.session_id)
+        .where(
+            ShiftDuty.station_id == user.station_id,
+            ShiftSession.business_date == business_date,
+        )
         .order_by(ShiftDuty.opened_at.desc())
     ).all()
     items = [_duty_public(session, row) for row in rows]
@@ -803,17 +833,18 @@ def _identity(user: User) -> dict:
 
 
 def _self_service(session: Session, user: User, today, identity: dict) -> dict:
-    shifts = _claimable_shifts(session, user, today)
+    shifts = _operator_shifts(session, user, today)
+    claimable = [item for item in shifts if item["claimable"]]
     nozzles = _station_nozzles(session, user)
     ready = [item for item in nozzles if item["selectable"]]
     reason = None
-    if not shifts:
-        reason = "لا توجد وردية متاحة اليوم."
+    if not claimable:
+        reason = "لا توجد وردية متاحة للفتح الآن." if shifts else "لا توجد ورديات مجدولة لهذا اليوم."
     elif not ready:
         reason = "لا توجد مضخة جاهزة لفتح وردية عليها."
     return {
         "date": today.isoformat(),
-        "can_open": bool(shifts) and bool(ready),
+        "can_open": bool(claimable) and bool(ready),
         "self_service": True,
         "reason": reason,
         "session": None,
@@ -900,11 +931,28 @@ def _align_worker_assignments(session: Session, user: User, shift: ShiftSession,
     return rostered_id
 
 
-def _claimable_shifts(session: Session, user: User, today) -> list[dict]:
+def _session_block_reason(session: Session, shift: ShiftSession | None, template: ShiftTemplate) -> str | None:
+    if not template.is_active:
+        return "هذه الوردية متوقفة في إعدادات المحطة."
+    if shift is None:
+        return None
+    if shift.status == "cancelled":
+        return "معطّلة لهذا اليوم من قبل مدير المحطة."
+    if shift.status == "approved":
+        return "تم إغلاق الوردية واعتماد جميع العهد."
+    if shift.status == "closed":
+        return "انتهت مدة الوردية."
+    ends = as_utc(shift.ends_at)
+    if ends is not None and ends < utcnow():
+        return "انتهت مدة الوردية."
+    return None
+
+
+def _operator_shifts(session: Session, user: User, today) -> list[dict]:
     templates = session.exec(
         select(ShiftTemplate)
-        .where(ShiftTemplate.station_id == user.station_id, ShiftTemplate.is_active == True)  # noqa: E712
-        .order_by(ShiftTemplate.sort_order)
+        .where(ShiftTemplate.station_id == user.station_id)
+        .order_by(ShiftTemplate.sort_order, ShiftTemplate.name_ar)
     ).all()
     rows = []
     for template in templates:
@@ -915,9 +963,15 @@ def _claimable_shifts(session: Session, user: User, today) -> list[dict]:
                 ShiftSession.business_date == today,
             )
         ).first()
-        if shift is not None and shift.status in {"approved", "cancelled"}:
-            continue
+        block_reason = _session_block_reason(session, shift, template)
         rostered = _rostered_names(session, shift) if shift is not None else []
+        session_status = shift.status if shift is not None else ("inactive" if not template.is_active else None)
+        if session_status is None:
+            status_label = "متاحة للفتح"
+        elif session_status == "inactive":
+            status_label = "متوقفة"
+        else:
+            status_label = _SESSION_LABELS.get(session_status, session_status)
         rows.append(
             {
                 "template_id": str(template.id),
@@ -925,6 +979,10 @@ def _claimable_shifts(session: Session, user: User, today) -> list[dict]:
                 "session_id": str(shift.id) if shift is not None else None,
                 "window": _window(template),
                 "rostered_name": "، ".join(rostered) if rostered else None,
+                "claimable": block_reason is None,
+                "session_status": session_status,
+                "status_label": status_label,
+                "block_reason": block_reason,
             }
         )
     return rows

@@ -4,9 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:frontend/core/constants/safety_instructions.dart';
 import 'package:frontend/core/di/injection.dart';
+import 'package:frontend/core/layout/responsive_layout.dart';
 import 'package:frontend/core/reporting/attendance_pdf.dart';
 import 'package:frontend/core/theming/app_colors.dart';
 import 'package:frontend/core/widgets/app_dialog.dart';
+import 'package:frontend/core/widgets/horizontal_data_table.dart';
 import 'package:frontend/core/widgets/pagination_bar.dart';
 import 'package:frontend/features/attendance/data/models/attendance_models.dart';
 import 'package:frontend/features/attendance/data/repos/attendance_repository.dart';
@@ -15,6 +17,8 @@ import 'package:frontend/features/shifts/data/repos/shift_repository.dart';
 import 'package:frontend/features/shifts/ui/duty_approval_panel.dart';
 import 'package:frontend/features/settings/data/repos/settings_repository.dart';
 import 'package:frontend/features/settings/logic/cubit/settings_cubit.dart';
+import 'package:frontend/core/time/system_clock.dart';
+import 'package:frontend/features/attendance/ui/widgets/attendance_date_bar.dart';
 import 'package:frontend/features/settings/ui/widgets/shift_templates_panel.dart';
 import 'package:printing/printing.dart';
 
@@ -36,11 +40,9 @@ class AttendanceScreen extends StatelessWidget {
         child: const AttendanceView(),
       );
     }
-    final today = DateTime.now();
-    final date = '${today.year.toString().padLeft(4, '0')}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
     return MultiBlocProvider(
       providers: [
-        BlocProvider(create: (_) => AttendanceCubit(getIt<AttendanceRepository>(), getIt<ShiftRepository>())..load(date: date)),
+        BlocProvider(create: (_) => AttendanceCubit(getIt<AttendanceRepository>(), getIt<ShiftRepository>())..load()),
         BlocProvider(create: (_) => SettingsCubit(getIt<SettingsRepository>())..load()),
       ],
       child: const AttendanceView(),
@@ -115,10 +117,23 @@ class _AttendanceOperationsTabState extends State<AttendanceOperationsTab> {
   Widget build(BuildContext context) {
     final state = context.watch<AttendanceCubit>().state;
     final summary = state.summary;
+    final cubit = context.read<AttendanceCubit>();
+    final serverToday = state.serverToday.isEmpty ? SystemClock.todayIso() : state.serverToday;
     return ListView(
-        padding: const EdgeInsets.all(24),
+        padding: managerPagePadding(context),
         children: [
-          Text('تاريخ اليوم: ${state.date}', style: const TextStyle(color: AppColors.onSurfaceVariant)),
+          AttendanceDateBar(
+            date: state.date,
+            serverToday: serverToday,
+            onPrevious: cubit.goToPreviousDay,
+            onNext: cubit.goToNextDay,
+            onPick: () => pickAttendanceDate(
+              context,
+              current: state.date,
+              serverToday: serverToday,
+              onSelected: cubit.pickDate,
+            ),
+          ),
           const SizedBox(height: 12),
           if (summary == null && state.loading)
             const Padding(padding: EdgeInsets.all(32), child: Center(child: CircularProgressIndicator()))
@@ -150,27 +165,43 @@ class _AttendanceOperationsTabState extends State<AttendanceOperationsTab> {
               child: Text(state.error!, key: const Key('attendance-error'), style: const TextStyle(color: AppColors.error)),
             ),
           const SizedBox(height: 20),
-          Row(
-            children: [
-              const Expanded(
-                child: Text(
-                  'الحضور المرتبط بالوردية وتوزيع المضخات',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary),
-                ),
-              ),
-              FilledButton.icon(
-                onPressed: state.sessionId == null ? null : () => _register(context, state),
-                icon: const Icon(Icons.person_add_alt),
-                label: const Text('تسجيل حضور وتكليف يدوي'),
-              ),
-              const SizedBox(width: 8),
-              OutlinedButton.icon(
-                key: const Key('attendance-export'),
-                onPressed: () => _export(context, state.rows),
-                icon: const Icon(Icons.download),
-                label: const Text('تصدير تقرير التكليفات'),
-              ),
-            ],
+          LayoutBuilder(
+            builder: (context, constraints) {
+              const heading = Text(
+                'الحضور المرتبط بالوردية وتوزيع المضخات',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary),
+              );
+              final actions = Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                alignment: WrapAlignment.end,
+                children: [
+                  FilledButton.icon(
+                    onPressed: state.sessionId == null ? null : () => _register(context, state),
+                    icon: const Icon(Icons.person_add_alt),
+                    label: const Text('تسجيل حضور وتكليف يدوي'),
+                  ),
+                  OutlinedButton.icon(
+                    key: const Key('attendance-export'),
+                    onPressed: () => _export(context, state.rows),
+                    icon: const Icon(Icons.download),
+                    label: const Text('تصدير تقرير التكليفات'),
+                  ),
+                ],
+              );
+              if (constraints.maxWidth < 720) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [heading, const SizedBox(height: 12), actions],
+                );
+              }
+              return Row(
+                children: [
+                  const Expanded(child: heading),
+                  actions,
+                ],
+              );
+            },
           ),
           if (state.sessions.length > 1) ...[
             const SizedBox(height: 12),
@@ -298,7 +329,7 @@ class _StatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 280,
+      constraints: const BoxConstraints(minWidth: 200, maxWidth: 320),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -318,6 +349,20 @@ class _StatCard extends StatelessWidget {
   }
 }
 
+abstract final class _AttendanceTableLayout {
+  /// Column widths plus horizontal row padding (12 + 12).
+  static const minWidth = 1126.0;
+  static const name = 180.0;
+  static const code = 110.0;
+  static const assignment = 220.0;
+  static const checkIn = 90.0;
+  static const checkOut = 90.0;
+  static const duty = 120.0;
+  static const status = 80.0;
+  static const note = 140.0;
+  static const actions = 72.0;
+}
+
 class _Table extends StatelessWidget {
   const _Table({required this.rows});
 
@@ -328,23 +373,15 @@ class _Table extends StatelessWidget {
     if (rows.isEmpty) {
       return const Text('لا يوجد تكليف في هذا اليوم.');
     }
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        const minWidth = 980.0;
-        final table = Column(
-          children: [
-            const _Header(),
-            for (final row in rows) _AttendanceLine(row: row),
-          ],
-        );
-        if (constraints.maxWidth >= minWidth) {
-          return table;
-        }
-        return SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: SizedBox(width: minWidth, child: table),
-        );
-      },
+    return HorizontalDataTable(
+      minWidth: _AttendanceTableLayout.minWidth,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const _Header(),
+          for (final row in rows) _AttendanceLine(row: row),
+        ],
+      ),
     );
   }
 }
@@ -360,15 +397,15 @@ class _Header extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       child: const Row(
         children: [
-          SizedBox(width: 180, child: Text('اسم الموظف', style: style)),
-          SizedBox(width: 110, child: Text('الرقم الوظيفي', style: style)),
-          SizedBox(width: 220, child: Text('التكليف الميداني', style: style)),
-          SizedBox(width: 90, child: Text('بدء الوردية', style: style)),
-          SizedBox(width: 90, child: Text('نهاية الوردية', style: style)),
-          SizedBox(width: 120, child: Text('حالة العهدة', style: style)),
-          SizedBox(width: 80, child: Text('الحالة', style: style)),
-          SizedBox(width: 140, child: Text('ملاحظات التشغيل', style: style)),
-          SizedBox(width: 72),
+          SizedBox(width: _AttendanceTableLayout.name, child: Text('اسم الموظف', style: style)),
+          SizedBox(width: _AttendanceTableLayout.code, child: Text('الرقم الوظيفي', style: style)),
+          SizedBox(width: _AttendanceTableLayout.assignment, child: Text('التكليف الميداني', style: style)),
+          SizedBox(width: _AttendanceTableLayout.checkIn, child: Text('بدء الوردية', style: style)),
+          SizedBox(width: _AttendanceTableLayout.checkOut, child: Text('نهاية الوردية', style: style)),
+          SizedBox(width: _AttendanceTableLayout.duty, child: Text('حالة العهدة', style: style)),
+          SizedBox(width: _AttendanceTableLayout.status, child: Text('الحالة', style: style)),
+          SizedBox(width: _AttendanceTableLayout.note, child: Text('ملاحظات التشغيل', style: style)),
+          SizedBox(width: _AttendanceTableLayout.actions),
         ],
       ),
     );
@@ -388,48 +425,68 @@ class _AttendanceLine extends StatelessWidget {
       color: Colors.white,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 180,
+            width: _AttendanceTableLayout.name,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(row.fullName, style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.primary)),
+                Text(
+                  row.fullName,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.primary),
+                ),
                 Text(row.jobTitle, style: const TextStyle(fontSize: 11, color: AppColors.onSurfaceVariant)),
               ],
             ),
           ),
-          SizedBox(width: 110, child: Text('#${row.employeeCode}')),
+          SizedBox(width: _AttendanceTableLayout.code, child: Text('#${row.employeeCode}')),
           SizedBox(
-            width: 220,
+            width: _AttendanceTableLayout.assignment,
             child: row.assignments.isEmpty
                 ? const Text('—')
                 : Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       for (final item in row.assignments)
-                        Text('${item.pumpCode}  مسدس ${item.nozzleCode}', softWrap: true),
+                        Text(
+                          '${item.pumpCode}  مسدس ${item.nozzleCode}',
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          softWrap: true,
+                        ),
                       Text(
                         row.assignments.map((item) => '${item.productName} • ${item.label}').join('، '),
                         style: const TextStyle(fontSize: 11, color: AppColors.onSurfaceVariant),
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
                         softWrap: true,
                       ),
                     ],
                   ),
           ),
           SizedBox(
-            width: 90,
+            width: _AttendanceTableLayout.checkIn,
             child: Text(
               checkIn,
               key: late ? const Key('late-check-in') : null,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(color: late ? AppColors.error : AppColors.onSurface, fontWeight: FontWeight.w700),
             ),
           ),
-          SizedBox(width: 90, child: Text(row.checkOutLabel ?? '—')),
           SizedBox(
-            width: 120,
+            width: _AttendanceTableLayout.checkOut,
+            child: Text(row.checkOutLabel ?? '—', maxLines: 1, overflow: TextOverflow.ellipsis),
+          ),
+          SizedBox(
+            width: _AttendanceTableLayout.duty,
             child: Text(
               row.duty?.statusLabel ?? '—',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
               softWrap: true,
               style: TextStyle(
                 fontWeight: FontWeight.w600,
@@ -438,18 +495,23 @@ class _AttendanceLine extends StatelessWidget {
             ),
           ),
           SizedBox(
-            width: 80,
+            width: _AttendanceTableLayout.status,
             child: Text(
               row.statusLabel,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 color: late ? AppColors.error : (row.status == 'present' ? _green : AppColors.onSurface),
                 fontWeight: FontWeight.w700,
               ),
             ),
           ),
-          SizedBox(width: 140, child: Text(row.note ?? '—')),
           SizedBox(
-            width: 72,
+            width: _AttendanceTableLayout.note,
+            child: Text(row.note ?? '—', maxLines: 3, overflow: TextOverflow.ellipsis, softWrap: true),
+          ),
+          SizedBox(
+            width: _AttendanceTableLayout.actions,
             child: TextButton(
               key: Key('attendance-edit-${row.id}'),
               onPressed: () => _edit(context, row),

@@ -7,6 +7,7 @@ from db import get_session
 from shifts.services import (
     approve_duty,
     close_duty,
+    duties_for_business_date,
     get_duty,
     my_assignment,
     my_duties,
@@ -68,6 +69,19 @@ def post_open(
     session: Session = Depends(get_session),
 ) -> dict:
     return open_duty(session, user, payload, _permissions(request))
+
+
+@router.get("/duties/by-date")
+def read_duties_by_date(
+    date: str,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=100),
+    user: User = Depends(require_permission("shifts.view_all")),
+    session: Session = Depends(get_session),
+) -> dict:
+    from attendance.services import _parse_date
+
+    return duties_for_business_date(session, user, _parse_date(date), page=page, page_size=page_size)
 
 
 @router.get("/duties/{duty_id}")

@@ -41,6 +41,35 @@ class _ShiftTemplateFormState extends State<ShiftTemplateForm> {
     super.dispose();
   }
 
+  TimeOfDay? _parseTime(String raw) {
+    final parts = raw.split(':');
+    if (parts.length < 2) {
+      return null;
+    }
+    final hour = int.tryParse(parts[0]);
+    final minute = int.tryParse(parts[1]);
+    if (hour == null || minute == null || hour > 23 || minute > 59) {
+      return null;
+    }
+    return TimeOfDay(hour: hour, minute: minute);
+  }
+
+  String _formatTime(TimeOfDay value) {
+    final h = value.hour.toString().padLeft(2, '0');
+    final m = value.minute.toString().padLeft(2, '0');
+    return '$h:$m';
+  }
+
+  Future<void> _pickTime({required bool start}) async {
+    final controller = start ? _start : _end;
+    final initial = _parseTime(controller.text.trim()) ?? (start ? const TimeOfDay(hour: 8, minute: 0) : const TimeOfDay(hour: 16, minute: 0));
+    final picked = await showTimePicker(context: context, initialTime: initial);
+    if (picked == null) {
+      return;
+    }
+    setState(() => controller.text = _formatTime(picked));
+  }
+
   bool get _overnight {
     final start = _start.text.trim();
     final end = _end.text.trim();
@@ -54,6 +83,10 @@ class _ShiftTemplateFormState extends State<ShiftTemplateForm> {
     final name = _name.text.trim();
     if (name.isEmpty) {
       setState(() => _error = 'اسم الوردية مطلوب.');
+      return;
+    }
+    if (_parseTime(_start.text.trim()) == null || _parseTime(_end.text.trim()) == null) {
+      setState(() => _error = 'اختر وقت بداية ونهاية صالحين.');
       return;
     }
     final grace = int.tryParse(_grace.text.trim());
@@ -73,6 +106,20 @@ class _ShiftTemplateFormState extends State<ShiftTemplateForm> {
     );
   }
 
+  Widget _timeField({required String label, required TextEditingController controller, required VoidCallback onPick}) {
+    return InkWell(
+      onTap: onPick,
+      borderRadius: BorderRadius.circular(8),
+      child: InputDecorator(
+        decoration: InputDecoration(
+          labelText: label,
+          suffixIcon: const Icon(Icons.schedule),
+        ),
+        child: Text(controller.text, style: const TextStyle(fontWeight: FontWeight.w600)),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -85,24 +132,22 @@ class _ShiftTemplateFormState extends State<ShiftTemplateForm> {
           decoration: const InputDecoration(labelText: 'اسم الوردية'),
         ),
         const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: _start,
-                onChanged: (_) => setState(() {}),
-                decoration: const InputDecoration(labelText: 'وقت البداية'),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: TextField(
-                controller: _end,
-                onChanged: (_) => setState(() {}),
-                decoration: const InputDecoration(labelText: 'وقت النهاية'),
-              ),
-            ),
-          ],
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final stacked = constraints.maxWidth < 360;
+            final start = _timeField(label: 'وقت البداية', controller: _start, onPick: () => _pickTime(start: true));
+            final end = _timeField(label: 'وقت النهاية', controller: _end, onPick: () => _pickTime(start: false));
+            if (stacked) {
+              return Column(children: [start, const SizedBox(height: 12), end]);
+            }
+            return Row(
+              children: [
+                Expanded(child: start),
+                const SizedBox(width: 12),
+                Expanded(child: end),
+              ],
+            );
+          },
         ),
         if (_overnight)
           const Padding(

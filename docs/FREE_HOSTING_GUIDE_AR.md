@@ -4,11 +4,11 @@
 
 | الجزء | الخدمة | الدور |
 |--------|--------|--------|
-| واجهة الويب (Flutter Web) | **Render** | المتصفح للمدير والمشغّل |
-| خادم API (FastAPI) | **Koyeb** | منطق النظام و REST API |
+| واجهة الويب (Flutter Web) | **Render** (Static Site) | المتصفح للمدير والمشغّل |
+| خادم API (FastAPI) | **Render** (Docker Web Service) | منطق النظام و REST API |
 | قاعدة البيانات | **Neon** | PostgreSQL |
 | جلسات تسجيل الدخول | **Upstash** | Redis |
-| تطبيق الهاتف (Android/iOS) | **لا استضافة** | يُثبَّت على الجهاز ويتصل مباشرة بـ API على Koyeb |
+| تطبيق الهاتف (Android/iOS) | **لا استضافة** | يُثبَّت على الجهاز ويتصل مباشرة بـ API على Render |
 
 > **Flutter على الهاتف:** التطبيق native (APK / IPA / desktop) **لا يُرفع** على Render. تبنيه محلياً أو عبر CI وتثبّته على الأجهزة؛ يكفي أن يعرف عنوان الـ API (`API_BASE_URL`) وقت البناء.
 
@@ -20,19 +20,20 @@
 
 | البند | مثال | أين تُستخدم |
 |--------|------|-------------|
-| `DATABASE_URL` | `postgresql://...@ep-xxx.neon.tech/neondb?sslmode=require` | Koyeb |
-| `REDIS_URL` | `rediss://default:...@xxx.upstash.io:6379` | Koyeb |
-| `JWT_SECRET` | 32+ حرف عشوائي | Koyeb |
-| كلمات مرور seed (اختياري) | `SEED_*_PASSWORD` | Koyeb |
-| رابط API العام | `https://xxx.koyeb.app` | Render → `API_BASE_URL` + بناء تطبيق الهاتف |
-| رابط موقع الويب | `https://xxx.onrender.com` | Koyeb → `CORS_ORIGINS` |
-| حسابات المنصات | GitHub للربط | Neon / Upstash / Koyeb / Render |
+| `DATABASE_URL` | `postgresql://...@ep-xxx.neon.tech/neondb?sslmode=require` | Render (API) |
+| `REDIS_URL` | `rediss://default:...@xxx.upstash.io:6379` | Render (API) |
+| مفاتيح S3 | `AWS_ENDPOINT_URL_S3`, `S3_BUCKET`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | Render (API) |
+| `JWT_SECRET` | 32+ حرف عشوائي | Render (API) |
+| كلمات مرور seed (اختياري) | `SEED_*_PASSWORD` | Render (API) |
+| رابط API العام | `https://fuel-station-api.onrender.com` | Static Site → `API_BASE_URL` + بناء الهاتف |
+| رابط موقع الويب | `https://fuel-station-web.onrender.com` | Render (API) → `CORS_ORIGINS` |
+| حسابات المنصات | GitHub للربط | Neon / Upstash / Render |
 
 قوالب المتغيرات:
 
-- `backend/.env.production.example` — Koyeb
-- `frontend/.env.deploy.example` — Render (`API_BASE_URL`)
-- `render.yaml` — Blueprint لموقع Flutter Web (اختياري من لوحة Render)
+- `backend/.env.production.example` — متغيرات خدمة API على Render
+- `frontend/.env.deploy.example` — `API_BASE_URL` لموقع Flutter
+- `render.yaml` — Blueprint: API (Docker) + Flutter Web (static)
 
 ---
 
@@ -40,10 +41,10 @@
 
 1. **Neon** — PostgreSQL → `DATABASE_URL`
 2. **Upstash** — Redis → `REDIS_URL`
-3. **Koyeb** — FastAPI + المتغيرات
+3. **Render** — Web Service (Docker) للـ API + المتغيرات
 4. **اختبار API** — `GET /api/v1/health`
 5. **Render** — Static Site لـ Flutter Web + `API_BASE_URL`
-6. **Koyeb** — `CORS_ORIGINS` = رابط Render
+6. **Render (API)** — `CORS_ORIGINS` = رابط موقع Flutter
 7. **(اختياري)** بناء APK/IPA للهاتف بنفس `API_BASE_URL`
 8. **اختبار نهائي** — متصفح + هاتف
 
@@ -53,7 +54,7 @@
 
 1. [https://neon.tech](https://neon.tech) → **New Project**.
 2. **Connection details** → انسخ **Connection string** (يفضّل **Pooled**).
-3. احفظها كـ **`DATABASE_URL`** في Koyeb (صيغة `postgresql://...` مقبولة؛ التطبيق يحوّلها لـ psycopg).
+3. احفظها كـ **`DATABASE_URL`** في Render (صيغة `postgresql://...` مقبولة؛ التطبيق يحوّلها لـ psycopg).
 
 **ملاحظة:** الخطة المجانية قد توقف DB بعد خمول؛ أول طلب قد يكون أبطأ.
 
@@ -63,26 +64,34 @@
 
 1. [https://upstash.com](https://upstash.com) → **Create database**.
 2. انسخ **Redis URL** (`rediss://...`) — **ليس** REST فقط.
-3. ضعه في Koyeb كـ **`REDIS_URL`**.
+3. ضعه في Render (خدمة API) كـ **`REDIS_URL`**.
 
 ---
 
-## 3) Koyeb — FastAPI
+## 3) Render — FastAPI (Docker Web Service)
 
 ### الملفات في المشروع
 
-- `backend/Dockerfile`
+- `backend/Dockerfile` — صورة Python + `uvicorn`
+- `backend/start.sh` — يستمع على `0.0.0.0` والمنفذ **`PORT`** (Render يضبطه)
 - `backend/.dockerignore`
 
-### النشر
+### النشر (يدوي)
 
-1. [https://www.koyeb.com](https://www.koyeb.com) → **Create App** → Git.
-2. **Docker** — Dockerfile: `backend/Dockerfile` (أو build context = `backend`).
-3. **Free** instance (512 MB).
+1. [https://dashboard.render.com](https://dashboard.render.com) → **New** → **Web Service** → Git.
+2. **Runtime:** Docker
+3. **Root Directory:** `backend` (إذا جذر Git هو `fuel-station-management-system`)
+4. **Dockerfile path:** `Dockerfile`
+5. **Health Check Path:** `/api/v1/health`
+6. **Instance type:** Free (إن وُجد)
+
+### النشر (Blueprint)
+
+**New** → **Blueprint** → الم repo يقرأ **`render.yaml`** (خدمة `fuel-station-api` + موقع Flutter).
 
 ### متغيرات البيئة
 
-من `backend/.env.production.example`:
+من `backend/.env.production.example` — كلها في **Environment** لخدمة API:
 
 | المتغير | ملاحظة |
 |---------|--------|
@@ -91,7 +100,14 @@
 | `JWT_SECRET` | 32+ حرف |
 | `AUTO_CREATE_TABLES` | `true` |
 | `SEED_ON_STARTUP` | `true` أول مرة، ثم `false` |
-| `CORS_ORIGINS` | مؤقتاً `*`؛ بعد Render = رابط الموقع |
+| `CORS_ORIGINS` | مؤقتاً `*`؛ بعد نشر Flutter = رابط Static Site |
+| `AWS_ENDPOINT_URL_S3` | S3-compatible |
+| `S3_BUCKET` | اسم الـ bucket |
+| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | مفاتيح التخزين |
+| `S3_PREFIX` | اختياري (`images`) |
+| `S3_PUBLIC_BASE_URL` | اختياري |
+
+**تخزين الصور:** على Render القرص مؤقت — فعّل S3 في الإنتاج.
 
 **أول نشر:**
 
@@ -100,20 +116,20 @@ CORS_ORIGINS=*
 SEED_ON_STARTUP=true
 ```
 
-**بعد Render:**
+**بعد نشر Flutter Web:**
 
 ```env
-CORS_ORIGINS=https://your-service.onrender.com
+CORS_ORIGINS=https://fuel-station-web.onrender.com
 SEED_ON_STARTUP=false
 ```
 
 ### Health check
 
 ```text
-https://YOUR-KOYEB-URL/api/v1/health
+https://YOUR-API.onrender.com/api/v1/health
 ```
 
-المتوقع: `"status": "ok"`, `"database": "postgresql"`, `"redis": "ok"`.
+المتوقع: `"status": "ok"`, `"database": "postgresql"`, `"redis": "ok"`, `"storage": "s3"`, `"storage_ok": "ok"`.
 
 ---
 
@@ -130,7 +146,7 @@ https://YOUR-KOYEB-URL/api/v1/health
 
 1. [https://dashboard.render.com](https://dashboard.render.com) → **New** → **Blueprint**.
 2. اربط الم repo؛ Render يقرأ **`render.yaml`** من الجذر (`fuel-station-management-system/render.yaml`).
-3. عند إنشاء الخدمة، أضف **`API_BASE_URL`** = رابط Koyeb (بدون `/` في النهاية).
+3. عند إنشاء الخدمة، أضف **`API_BASE_URL`** = رابط API على Render (بدون `/` في النهاية).
 
 ### الطريقة ب — يدوياً من لوحة Render
 
@@ -142,7 +158,7 @@ https://YOUR-KOYEB-URL/api/v1/health
 
 | Key | Value |
 |-----|--------|
-| `API_BASE_URL` | `https://YOUR-KOYEB-URL` |
+| `API_BASE_URL` | `https://YOUR-API.onrender.com` |
 
 6. **Create Static Site**.
 
@@ -156,15 +172,15 @@ https://YOUR-KOYEB-URL/api/v1/health
 
 ### بعد النشر
 
-1. Koyeb → `CORS_ORIGINS=https://your-service.onrender.com`
-2. أعد نشر Koyeb إن لزم.
+1. خدمة API على Render → `CORS_ORIGINS=https://your-flutter-site.onrender.com`
+2. **Manual Deploy** أو push لإعادة تشغيل API إن لزم.
 
 ### بناء محلي (إذا فشل البناء على Render أو كان بطيئاً)
 
 ```bash
 cd frontend
 flutter pub get
-flutter build web --release --dart-define=API_BASE_URL=https://YOUR-KOYEB-URL
+flutter build web --release --dart-define=API_BASE_URL=https://YOUR-API.onrender.com
 echo /*    /index.html   200 > build/web/_redirects
 ```
 
@@ -184,24 +200,24 @@ echo /*    /index.html   200 > build/web/_redirects
 
 ### اتصال التطبيق بالـ API
 
-نفس عنوان Koyeb يُمرَّر وقت البناء:
+نفس عنوان API على Render يُمرَّر وقت البناء:
 
 ```bash
 cd frontend
-flutter build apk --release --dart-define=API_BASE_URL=https://YOUR-KOYEB-URL
+flutter build apk --release --dart-define=API_BASE_URL=https://YOUR-API.onrender.com
 ```
 
 أو iOS:
 
 ```bash
-flutter build ipa --release --dart-define=API_BASE_URL=https://YOUR-KOYEB-URL
+flutter build ipa --release --dart-define=API_BASE_URL=https://YOUR-API.onrender.com
 ```
 
 ثبّت الملف على الجهاز (USB، TestFlight، Google Play internal، إلخ).
 
 ### CORS و الهاتف
 
-**CORS** يخص المتصفح فقط. تطبيق Flutter على Android/iOS **لا يستخدم CORS**؛ يكفي أن الـ API متاح عبر HTTPS وأن Koyeb يقبل الطلبات.
+**CORS** يخص المتصفح فقط. تطبيق Flutter على Android/iOS **لا يستخدم CORS**؛ يكفي أن الـ API على Render متاح عبر HTTPS.
 
 ### تطوير يومي على الهاتف
 
@@ -209,7 +225,7 @@ flutter build ipa --release --dart-define=API_BASE_URL=https://YOUR-KOYEB-URL
 flutter run --dart-define=API_BASE_URL=http://192.168.x.x:8000
 ```
 
-(شبكة محلية + API يعمل على جهازك أو Koyeb.)
+(شبكة محلية + API يعمل على جهازك أو على Render.)
 
 ---
 
@@ -247,6 +263,8 @@ flutter run --dart-define=API_BASE_URL=http://192.168.x.x:8000
 | الهاتف لا يتصل | تحقق من HTTPS و URL وقت `flutter build` |
 | Render build failed | راجع Logs؛ أو ابنِ web محلياً |
 | Neon بطيء أول طلب | cold start — أعد المحاولة |
+| `storage_ok: down` | تحقق من S3 bucket والمفاتيح و`AWS_ENDPOINT_URL_S3` |
+| صور لا تظهر | health للتخزين؛ أو `S3_PUBLIC_BASE_URL` / مسار `/api/v1/media/` |
 
 ---
 
@@ -271,9 +289,9 @@ flutter run -d chrome --dart-define=API_BASE_URL=http://127.0.0.1:8000
 
 | الملف | الغرض |
 |--------|--------|
-| `backend/Dockerfile` | Koyeb |
-| `backend/.env.production.example` | متغيرات Koyeb |
-| `render.yaml` | Render Static Site |
+| `backend/Dockerfile` | Render Web Service (Docker) |
+| `backend/.env.production.example` | متغيرات API |
+| `render.yaml` | Blueprint: API + Static Site |
 | `frontend/scripts/render_build.sh` | بناء Flutter Web |
 | `frontend/.env.deploy.example` | `API_BASE_URL` لـ Render |
 

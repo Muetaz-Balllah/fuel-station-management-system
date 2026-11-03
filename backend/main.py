@@ -16,6 +16,8 @@ from supply.routes import router as supply_router
 from auth.routes import router as auth_router
 from config import settings
 from core.cache import session_cache
+from core.media_routes import router as media_router
+from core.storage import image_store
 from db import engine
 from errors import AppError
 from stations.catalog_routes import products_router, templates_router
@@ -33,7 +35,8 @@ async def lifespan(app: FastAPI):
     import stations.models  # noqa: F401
     import users.models  # noqa: F401
 
-    Path("uploads").mkdir(parents=True, exist_ok=True)
+    if not image_store.is_s3():
+        Path("uploads").mkdir(parents=True, exist_ok=True)
     if settings.auto_create_tables:
         SQLModel.metadata.create_all(engine)
         from schema_patch import apply_sqlite_patches
@@ -82,12 +85,17 @@ def create_app() -> FastAPI:
     @app.get("/api/v1/health")
     def health() -> dict[str, str]:
         database = "sqlite" if settings.database_url.startswith("sqlite") else "postgresql"
+        storage = "s3" if image_store.is_s3() else "local"
+        storage_ok = image_store.ping()
         return {
             "status": "ok",
             "database": database,
             "redis": "ok" if session_cache.ping() else "down",
+            "storage": storage,
+            "storage_ok": "ok" if storage_ok else "down",
         }
 
+    app.include_router(media_router, prefix="/api/v1")
     app.include_router(auth_router, prefix="/api/v1")
     app.include_router(station_router, prefix="/api/v1")
     app.include_router(users_router, prefix="/api/v1")
@@ -99,8 +107,9 @@ def create_app() -> FastAPI:
     app.include_router(supply_router, prefix="/api/v1")
     app.include_router(dashboard_router, prefix="/api/v1")
     app.include_router(system_router, prefix="/api/v1")
-    Path("uploads").mkdir(parents=True, exist_ok=True)
-    app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+    if not image_store.is_s3():
+        Path("uploads").mkdir(parents=True, exist_ok=True)
+        app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
     return app
 
 

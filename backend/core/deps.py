@@ -91,7 +91,7 @@ def require_role(code: str):
         if getattr(request.state, "role_code", "") != code:
             raise AppError(
                 "FORBIDDEN",
-                "هذا الإجراء متاح لمدير النظام فقط.",
+                "ليست لديك صلاحية لتنفيذ هذا الإجراء.",
                 403,
             )
         return user

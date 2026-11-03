@@ -3,9 +3,8 @@ import uuid
 from fastapi import APIRouter, Depends, File, UploadFile
 from sqlmodel import Session
 
-from core.deps import require_permission, require_role
+from core.deps import require_permission
 from db import get_session
-from enums import RoleCode
 from users.models import User
 from users.schemas import PermissionReplace, RolePublic, StaffPublic, UserCreate, UserUpdate
 from users.services import create_staff, list_roles, list_staff, replace_permissions, save_photo, update_staff
@@ -69,7 +68,7 @@ def read_roles(
 def put_permissions(
     role_id: uuid.UUID,
     payload: PermissionReplace,
-    user: User = Depends(require_role(RoleCode.SYSTEM_ADMIN)),
+    user: User = Depends(require_permission("users.manage")),
     session: Session = Depends(get_session),
 ) -> RolePublic:
     return replace_permissions(session, user, role_id, payload)

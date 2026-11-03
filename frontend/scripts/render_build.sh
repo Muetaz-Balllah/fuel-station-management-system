@@ -5,7 +5,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 if [[ -z "${API_BASE_URL:-}" ]]; then
-  echo "Error: set API_BASE_URL in Render (Koyeb API URL, no trailing slash)." >&2
+  echo "Error: set API_BASE_URL in Render (API service URL, no trailing slash)." >&2
   exit 1
 fi
 

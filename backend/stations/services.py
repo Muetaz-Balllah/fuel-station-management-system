@@ -1,8 +1,7 @@
-from pathlib import Path
-
 from fastapi import UploadFile
 from sqlmodel import Session
 
+from core.storage import image_store
 from errors import AppError
 from stations.models import Station
 from stations.schemas import StationPublic, StationUpdate
@@ -99,13 +98,17 @@ def store_image(upload: UploadFile, stem: str) -> str:
     if len(data) > _MAX_LOGO_BYTES:
         raise AppError("VALIDATION_ERROR", "حجم الصورة يجب ألا يتجاوز 2 ميغابايت.", 422)
     ext = _image_extension(data, upload)
-    folder = Path("uploads")
-    folder.mkdir(parents=True, exist_ok=True)
-    for old in folder.glob(f"{stem}.*"):
-        old.unlink(missing_ok=True)
     filename = f"{stem}{ext}"
-    (folder / filename).write_bytes(data)
-    return f"/uploads/{filename}?v={int(utcnow().timestamp())}"
+    content_type = (upload.content_type or "").split(";")[0].strip().lower() or "application/octet-stream"
+    image_store.delete_stem(stem)
+    try:
+        image_store.save(data=data, filename=filename, content_type=content_type)
+    except ValueError as exc:
+        raise AppError("VALIDATION_ERROR", "اسم ملف الصورة غير صالح.", 422) from exc
+    except OSError as exc:
+        raise AppError("STORAGE_UNAVAILABLE", "تعذر حفظ الصورة. تحقق من إعدادات التخزين.", 503) from exc
+    version = int(utcnow().timestamp())
+    return image_store.public_path(filename, version=version)
 
 
 def _image_extension(data: bytes, upload: UploadFile) -> str:

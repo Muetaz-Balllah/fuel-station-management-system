@@ -35,7 +35,7 @@ class AuthUser {
 
   bool get isOperator => roleCode == 'operator';
 
-  bool get isManager => roleCode == 'station_manager' || roleCode == 'system_admin';
+  bool get isManager => roleCode == 'station_manager';
 
   String get initials {
     final parts = fullName

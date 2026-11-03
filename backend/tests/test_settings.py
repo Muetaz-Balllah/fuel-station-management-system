@@ -169,27 +169,21 @@ def test_operator_cannot_open_settings(client):
     ).status_code == 403
 
 
-def test_only_system_admin_can_replace_permissions(client):
+def test_manager_replaces_operator_permissions(client):
     manager = login(client, "manager", "Manager@12345")["access_token"]
     roles = client.get("/api/v1/roles", headers=auth_header(manager)).json()["items"]
+    assert [item["code"] for item in roles] == ["station_manager", "operator"]
     operator_role = next(item for item in roles if item["code"] == "operator")
-    denied = client.put(
-        f"/api/v1/roles/{operator_role['id']}/permissions",
-        headers=auth_header(manager),
-        json={"permissions": ["shifts.operate"]},
-    )
-    assert denied.status_code == 403
-    admin = login(client, "admin", "Admin@12345")["access_token"]
     updated = client.put(
         f"/api/v1/roles/{operator_role['id']}/permissions",
-        headers=auth_header(admin),
+        headers=auth_header(manager),
         json={"permissions": ["shifts.operate", "shifts.view_all"]},
     )
     assert updated.status_code == 200, updated.text
     assert "shifts.view_all" in updated.json()["permissions"]
     restored = client.put(
         f"/api/v1/roles/{operator_role['id']}/permissions",
-        headers=auth_header(admin),
+        headers=auth_header(manager),
         json={"permissions": ["shifts.operate"]},
     )
     assert restored.status_code == 200
@@ -204,7 +198,7 @@ def test_logo_upload(client):
     )
     assert uploaded.status_code == 200, uploaded.text
     logo_url = uploaded.json()["logo_url"]
-    assert logo_url.startswith("/uploads/")
-    fetched = client.get(logo_url)
+    assert logo_url.startswith("/api/v1/media/")
+    fetched = client.get(logo_url.split("?", 1)[0])
     assert fetched.status_code == 200
     assert fetched.content.startswith(b"\x89PNG")

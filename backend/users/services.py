@@ -14,7 +14,7 @@ from users.models import Permission, Role, RolePermission, User
 from users.schemas import PermissionReplace, RolePublic, StaffPublic, UserCreate, UserUpdate
 from utils import utcnow
 
-_ROLE_ORDER = [RoleCode.SYSTEM_ADMIN, RoleCode.STATION_MANAGER, RoleCode.OPERATOR]
+_ROLE_ORDER = [RoleCode.STATION_MANAGER, RoleCode.OPERATOR]
 
 
 def list_staff(
@@ -155,6 +155,7 @@ def update_staff(session: Session, actor: User, user_id: uuid.UUID, payload: Use
 
 def list_roles(session: Session) -> list[RolePublic]:
     rows = session.exec(select(Role)).all()
+    rows = [row for row in rows if row.code != RoleCode.SYSTEM_ADMIN]
     order = {code: index for index, code in enumerate(_ROLE_ORDER)}
     rows.sort(key=lambda row: order.get(row.code, 99))
     return [
@@ -180,12 +181,14 @@ def replace_permissions(
     unknown = [code for code in payload.permissions if code not in PermissionCode.ALL]
     if unknown:
         raise AppError("VALIDATION_ERROR", "صلاحية غير معروفة.", 422)
-    if role.code == RoleCode.SYSTEM_ADMIN and PermissionCode.USERS_MANAGE not in payload.permissions:
+    if role.code == RoleCode.STATION_MANAGER and PermissionCode.USERS_MANAGE not in payload.permissions:
         raise AppError(
             "VALIDATION_ERROR",
-            "لا يمكن سحب صلاحية إدارة المستخدمين من مدير النظام.",
+            "لا يمكن سحب صلاحية إدارة المستخدمين من مدير المحطة.",
             422,
         )
+    if role.code == RoleCode.SYSTEM_ADMIN:
+        raise AppError("ROLE_NOT_FOUND", "هذا الدور غير مستخدم في النظام.", 404)
     existing = session.exec(
         select(RolePermission).where(RolePermission.role_id == role.id)
     ).all()
@@ -269,15 +272,9 @@ def _role_by_code(session: Session, code: str) -> Role:
 
 
 def _guard_admin_assignment(session: Session, actor: User, role: Role) -> None:
-    if role.code != RoleCode.SYSTEM_ADMIN:
-        return
-    actor_role = session.get(Role, actor.role_id)
-    if actor_role is None or actor_role.code != RoleCode.SYSTEM_ADMIN:
-        raise AppError(
-            "FORBIDDEN",
-            "فقط مدير النظام يستطيع تعيين دور مدير النظام.",
-            403,
-        )
+    del session, actor
+    if role.code == RoleCode.SYSTEM_ADMIN:
+        raise AppError("VALIDATION_ERROR", "هذا الدور غير مستخدم في النظام.", 422)
 
 
 def _check_password(password: str) -> None:

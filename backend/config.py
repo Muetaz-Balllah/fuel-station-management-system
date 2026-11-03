@@ -1,4 +1,4 @@
-from pydantic import field_validator
+from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -18,6 +18,7 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",
+        populate_by_name=True,
     )
 
     # sqlite:///./fuel_station.db for local work. PostgreSQL is the same code:
@@ -36,11 +37,17 @@ class Settings(BaseSettings):
     seed_manager_password: str = "Manager@12345"
     seed_operator_username: str = "operator"
     seed_operator_password: str = "Operator@12345"
-    seed_admin_username: str = "admin"
-    seed_admin_password: str = "Admin@12345"
     seed_demo_assets: bool = True
     cors_origins: str = "*"
     app_name: str = "Fuel Station Management System"
+
+    # S3-compatible object storage (Tigris, R2, MinIO, etc.). When endpoint + bucket are set, images go to S3.
+    aws_endpoint_url_s3: str | None = Field(default=None, validation_alias="AWS_ENDPOINT_URL_S3")
+    s3_bucket: str | None = Field(default=None, validation_alias=AliasChoices("S3_BUCKET", "BUCKET_NAME"))
+    aws_region: str = Field(default="auto", validation_alias="AWS_REGION")
+    s3_prefix: str = Field(default="images", validation_alias="S3_PREFIX")
+    # Optional public CDN/base URL; if empty, API serves files at /api/v1/media/{filename}
+    s3_public_base_url: str | None = Field(default=None, validation_alias="S3_PUBLIC_BASE_URL")
 
     @field_validator("database_url", mode="before")
     @classmethod

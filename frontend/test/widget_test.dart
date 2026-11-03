@@ -163,7 +163,6 @@ void main() {
           logoUrl: null,
         ),
         roles: [
-          RoleGrant(id: '1', code: 'system_admin', nameAr: 'مدير النظام', permissions: []),
           RoleGrant(id: '2', code: 'station_manager', nameAr: 'مدير المحطة', permissions: []),
           RoleGrant(id: '3', code: 'operator', nameAr: 'موظف', permissions: ['shifts.operate']),
         ],

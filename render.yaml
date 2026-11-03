@@ -1,10 +1,39 @@
-# Render Blueprint: Flutter Web static site only.
-# API stays on Koyeb (backend/Dockerfile). Mobile apps are built locally — no Render service.
+# Render Blueprint: API (Docker) + Flutter Web (static).
+# New → Blueprint → connect repo. Set secret env vars in the dashboard when prompted.
 #
-# Dashboard alternative: New → Static Site → rootDir frontend, publish build/web,
-# build: bash scripts/render_build.sh, env API_BASE_URL.
+# If Git root is the monorepo folder, paths below are correct.
+# Adjust rootDir / dockerContext if your repo layout differs.
 
 services:
+  - type: web
+    name: fuel-station-api
+    runtime: docker
+    plan: free
+    dockerfilePath: backend/Dockerfile
+    dockerContext: backend
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: AWS_ENDPOINT_URL_S3
+        sync: false
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: S3_BUCKET
+        sync: false
+      - key: AUTO_CREATE_TABLES
+        value: "true"
+      - key: SEED_ON_STARTUP
+        value: "true"
+      - key: CORS_ORIGINS
+        sync: false
+
   - type: web
     name: fuel-station-web
     runtime: static

@@ -13,13 +13,11 @@ from users.models import Permission, Role, RolePermission, User
 _LICENSE_EXPIRES = date(2027, 12, 31)
 
 _ROLE_NAMES = {
-    RoleCode.SYSTEM_ADMIN: "مدير النظام",
     RoleCode.STATION_MANAGER: "مدير المحطة",
     RoleCode.OPERATOR: "موظف",
 }
 
 _ROLE_GRANTS = {
-    RoleCode.SYSTEM_ADMIN: PermissionCode.ALL,
     RoleCode.STATION_MANAGER: PermissionCode.ALL,
     RoleCode.OPERATOR: [PermissionCode.SHIFTS_OPERATE],
 }
@@ -76,17 +74,6 @@ def seed(session: Session, settings) -> None:
     _ensure_user(
         session,
         station=station,
-        role=roles[RoleCode.SYSTEM_ADMIN],
-        username=settings.seed_admin_username,
-        password=settings.seed_admin_password,
-        employee_code="EMP-0000",
-        full_name="مدير النظام",
-        job_title="مدير النظام",
-        email="admin@station.local",
-    )
-    _ensure_user(
-        session,
-        station=station,
         role=roles[RoleCode.STATION_MANAGER],
         username=settings.seed_manager_username,
         password=settings.seed_manager_password,
@@ -106,7 +93,7 @@ def seed(session: Session, settings) -> None:
         job_title="فني مضخات ووردية",
         email="operator@station.local",
     )
-    _ensure_catalog(session, station, settings.seed_admin_username)
+    _ensure_catalog(session, station, settings.seed_manager_username)
     if settings.seed_demo_assets:
         from assets.seed import seed_initial_assets
 

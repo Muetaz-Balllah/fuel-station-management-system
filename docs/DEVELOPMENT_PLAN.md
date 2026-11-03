@@ -64,7 +64,7 @@ Prices are per product. The single “0.150 د.ل / لتر” line is shown only
 
 **Attendance is assignment plus presence.** The attendance table’s main column is the field posting: pump and nozzle, side, product. Status is حاضر, متأخر, or غائب. Late means check-in after the shift start plus that template’s grace minutes (default 10).
 
-**Two roles ship in the product, four exist in settings.** Day-to-day use is manager and operator. Settings also shows مدير النظام and فني صيانة. v1 seeds three roles: `system_admin`, `station_manager`, `operator`. A maintenance flag on the user can mark فني صيانة without a fourth permission set. The manager cannot delete financial records. Nobody hard-deletes them.
+**Two roles ship in the product.** Day-to-day use is the station manager and the pump operator. v1 seeds `station_manager` and `operator`. A maintenance flag on the user can mark فني صيانة in the user list without a third role. The manager cannot delete financial records. Nobody hard-deletes them.
 
 **Login is username and password issued by the manager.** “نسيت كلمة المرور؟” tells the user to ask the station manager. The manager resets the password from user management. v1 does not send mail.
 
@@ -222,7 +222,7 @@ A feature folder is created in the phase that builds that feature. Do not scaffo
 
 After login the API returns `role` and a permission list. The router sends:
 
-- `station_manager` and `system_admin` to the manager shell (right sidebar).
+- `station_manager` to the manager shell (right sidebar).
 - `operator` to the operator shell.
 
 Manager destinations, in sidebar order from the mockups:
@@ -276,8 +276,7 @@ Seed grants:
 
 | Role | Gets | Does not get |
 | --- | --- | --- |
-| system_admin | all of the above | — |
-| station_manager | all except none of the financial-delete path, because that path does not exist | a hard delete of ledger or approved duties |
+| station_manager | all permissions | a hard delete of ledger or approved duties, because that path does not exist |
 | operator | `shifts.operate` only | prices, settings, other people’s shifts, supply, assets |
 
 **users**
@@ -546,7 +545,7 @@ All paths are under `/api/v1`. Auth is required except login and refresh.
 | GET, POST | `/users` | `users.manage` |
 | PATCH | `/users/{id}` | includes `is_active`, role, reset password |
 | GET | `/roles` | `users.manage` |
-| PUT | `/roles/{id}/permissions` | `system_admin` only |
+| PUT | `/roles/{id}/permissions` | `users.manage` (station manager) |
 | GET, POST | `/products` | POST `prices.manage` |
 | GET, POST | `/products/{id}/prices` | POST adds a new effective price, does not edit the old row |
 | GET, POST, PATCH | `/shift-templates` | `settings.manage` |
@@ -704,13 +703,13 @@ Each phase lists the backend work, the Flutter work, and the checks that mean �
 
 **Outcome.** The settings screen’s four tabs work, and later phases can trust products, prices, users, and templates.
 
-**Backend.** Tables and routes from the phase 2 API list. Price insert is append-only. Password reset sets a new bcrypt hash and revokes that user’s refresh tokens. Role permission edit is limited to `system_admin`. Validation: template grace `0…120`, price `> 0`, username unique.
+**Backend.** Tables and routes from the phase 2 API list. Price insert is append-only. Password reset sets a new bcrypt hash and revokes that user’s refresh tokens. Role permission edit requires `users.manage`, which the station manager holds. Validation: template grace `0…120`, price `> 0`, username unique.
 
 **Flutter.** `SettingsScreen` from `code6.html`.
 
 - إعدادات المحطة: name, license, renewal date, coordinates, logo upload, save and cancel.
 - إدارة المستخدمين: search, role filter (including فني صيانة via `is_maintenance`), add, edit, deactivate. Deactivated rows look muted and can be restored. No hard delete.
-- الأدوار والصلاحيات: three cards matching the mock (مدير النظام, مدير المحطة, موظف). Toggling a permission calls `PUT` and is disabled for a non-admin.
+- الأدوار والصلاحيات: cards for مدير المحطة and موظف. Toggling a permission calls `PUT` and requires `users.manage`.
 - إعدادات الورديات: the panel missing from the HTML. List templates, add and edit name, start, end, grace, active. Seed صباحية 08:00–16:00 and مسائية 16:00–00:00 so the rest of the app has the mock’s clock.
 
 **Done when**
@@ -865,7 +864,7 @@ These were missing from the mockups or from the first pass of this plan, and Pha
 
 - **SQLite is the local database.** `db.py` keeps one engine factory. An in-memory URL uses a single shared connection so tests see the seeded rows. A file URL uses a normal pool. A PostgreSQL URL keeps `pool_pre_ping`. No service imports a driver.
 - **Redis is the access-token allow-list.** Login writes `jwt:{jti}` with the role and permission codes. `get_current_user` requires that key. Logout deletes the token that belongs to the presented refresh token. Deactivation, password reset, and a role-permission save delete every key for that user.
-- **A system admin is seeded** as `admin` / `Admin@12345`, employee `EMP-0000`, because only that role can save permission changes. The manager account stays `station_manager`.
+- **The station manager saves permission changes.** The seeded accounts are the manager and the operator. There is no separate system-admin login.
 - **You cannot deactivate your own account.**
 - **A manager cannot assign the system-admin role.** Only a system admin can.
 - **Fuel prices live on the station settings tab.** The mock has four tabs and no price panel. The official price is station configuration, so it sits under إعدادات المحطة. Old price rows are never updated.

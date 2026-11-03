@@ -72,16 +72,16 @@
 
 ### الملفات في المشروع
 
-- `backend/Dockerfile` — صورة Python + `uvicorn`
+- `Dockerfile` (جذر `fuel-station-management-system`) — ينسخ `backend/` ويبني الصورة
 - `backend/start.sh` — يستمع على `0.0.0.0` والمنفذ **`PORT`** (Render يضبطه)
-- `backend/.dockerignore`
+- `.dockerignore` (جذر المشروع)
 
 ### النشر (يدوي)
 
 1. [https://dashboard.render.com](https://dashboard.render.com) → **New** → **Web Service** → Git.
 2. **Runtime:** Docker
-3. **Root Directory:** `backend` (إذا جذر Git هو `fuel-station-management-system`)
-4. **Dockerfile path:** `Dockerfile`
+3. **Root Directory:** `fuel-station-management-system` (أو `.` إذا Git يبدأ من هذا المجلد)
+4. **Dockerfile path:** `Dockerfile` (في الجذر، وليس داخل `backend/`)
 5. **Health Check Path:** `/api/v1/health`
 6. **Instance type:** Free (إن وُجد)
 
@@ -289,7 +289,7 @@ flutter run -d chrome --dart-define=API_BASE_URL=http://127.0.0.1:8000
 
 | الملف | الغرض |
 |--------|--------|
-| `backend/Dockerfile` | Render Web Service (Docker) |
+| `Dockerfile` | Render Web Service (Docker) |
 | `backend/.env.production.example` | متغيرات API |
 | `render.yaml` | Blueprint: API + Static Site |
 | `frontend/scripts/render_build.sh` | بناء Flutter Web |

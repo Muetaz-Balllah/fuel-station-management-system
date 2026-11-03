@@ -1,0 +1,27 @@
+# Docker build context = project root; only backend/ is copied, but ignore noise at root too.
+
+.git
+.gitignore
+**/.env
+**/.env.*
+**/__pycache__
+**/*.py[cod]
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+**/*.db
+**/.venv
+**/venv
+
+frontend/
+docs/
+ui-designs/
+render.yaml
+README.md
+DEPLOYMENT.md
+
+backend/.env
+backend/.env.*
+backend/tests
+backend/uploads/*
+!backend/uploads/.gitkeep

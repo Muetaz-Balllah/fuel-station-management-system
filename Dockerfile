@@ -1,14 +1,13 @@
-# FastAPI backend — Docker image for Render.com Web Service
+# FastAPI backend — built from repository root (fuel-station-management-system/)
 #
-# Render dashboard (Manual):
-#   New → Web Service → Connect repo
+# Render dashboard:
 #   Runtime: Docker
-#   Root Directory: backend          (if repo root is fuel-station-management-system)
+#   Root Directory: .  (this folder — fuel-station-management-system)
 #   Dockerfile path: Dockerfile
 #   Health Check Path: /api/v1/health
-#   Environment: see .env.production.example (Neon, Upstash, S3, JWT, CORS)
 #
-# Render injects PORT; start.sh binds uvicorn to 0.0.0.0:$PORT
+# Local build from repo root:
+#   docker build -t fuel-station-api .
 
 FROM python:3.12-slim
 
@@ -23,10 +22,10 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends libpq5 \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
+COPY backend/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . .
+COPY backend/ .
 
 RUN chmod +x start.sh
 

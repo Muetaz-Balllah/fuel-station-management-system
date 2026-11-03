@@ -3,7 +3,7 @@
 Use this when uploading the project to hosting for the first test run.
 
 **Free tier (Neon + Upstash + Render API + Render Flutter web):** step-by-step guide in Arabic — [`docs/FREE_HOSTING_GUIDE_AR.md`](docs/FREE_HOSTING_GUIDE_AR.md).  
-Templates: `backend/.env.production.example`, `backend/Dockerfile`, `render.yaml`, `frontend/scripts/render_build.sh`.  
+Templates: `backend/.env.production.example`, `Dockerfile` (repo root), `render.yaml`, `frontend/scripts/render_build.sh`.  
 Flutter **mobile/desktop** builds run on devices — no static host; use the same `API_BASE_URL` when building releases.
 
 ## Backend

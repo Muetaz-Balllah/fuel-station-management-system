@@ -2,6 +2,10 @@
 
 Use this when uploading the project to hosting for the first test run.
 
+**Free tier (Neon + Upstash + Koyeb + Render):** step-by-step guide in Arabic — [`docs/FREE_HOSTING_GUIDE_AR.md`](docs/FREE_HOSTING_GUIDE_AR.md).  
+Templates: `backend/.env.production.example`, `backend/Dockerfile`, `render.yaml`, `frontend/scripts/render_build.sh`.  
+Flutter **mobile/desktop** builds run on devices — no static host; use the same `API_BASE_URL` when building releases.
+
 ## Backend
 
 1. Copy `backend/.env.example` to `backend/.env` on the server.
@@ -20,9 +24,13 @@ Use this when uploading the project to hosting for the first test run.
 
 ## Frontend (Flutter)
 
-1. Build with the hosted API URL, e.g.  
-   `flutter build web --dart-define=API_BASE_URL=https://your-api.example.com`
-2. Serve the `build/web` output from your static host or CDN.
+**Web (Render static site):** set `API_BASE_URL` in Render; build uses `frontend/scripts/render_build.sh`. See `render.yaml`.
+
+**Mobile / desktop (no hosting):** build with the same API URL, e.g.  
+`flutter build apk --release --dart-define=API_BASE_URL=https://your-api.example.com`
+
+Local web:  
+`flutter build web --dart-define=API_BASE_URL=https://your-api.example.com`
 
 ## Fresh database
 

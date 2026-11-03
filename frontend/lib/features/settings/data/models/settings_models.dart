@@ -142,6 +142,7 @@ class ShiftTemplateItem {
     required this.graceMinutes,
     required this.isActive,
     required this.crossesMidnight,
+    required this.businessDate,
   });
 
   final String id;
@@ -151,6 +152,7 @@ class ShiftTemplateItem {
   final int graceMinutes;
   final bool isActive;
   final bool crossesMidnight;
+  final String businessDate;
 
   factory ShiftTemplateItem.fromJson(Map<String, dynamic> json) {
     return ShiftTemplateItem(
@@ -161,6 +163,7 @@ class ShiftTemplateItem {
       graceMinutes: json['grace_minutes'] as int? ?? 0,
       isActive: json['is_active'] as bool? ?? true,
       crossesMidnight: json['crosses_midnight'] as bool? ?? false,
+      businessDate: json['business_date'] as String? ?? '',
     );
   }
 }

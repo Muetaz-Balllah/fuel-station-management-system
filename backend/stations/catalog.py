@@ -49,6 +49,7 @@ class ShiftPublic(BaseModel):
     grace_minutes: int
     is_active: bool
     crosses_midnight: bool
+    business_date: str
 
 
 class ShiftWrite(BaseModel):
@@ -142,11 +143,11 @@ def add_price(session: Session, user: User, product_id: uuid.UUID, payload: Pric
 
 
 def list_templates(session: Session, user: User) -> list[ShiftPublic]:
-    rows = session.exec(
-        select(ShiftTemplate)
-        .where(ShiftTemplate.station_id == user.station_id)
-        .order_by(ShiftTemplate.sort_order, ShiftTemplate.name_ar)
-    ).all()
+    from attendance.services import sweep_expired_sessions
+    from stations.shift_timing import today_plannable_templates
+
+    sweep_expired_sessions(session, user.station_id)
+    rows = today_plannable_templates(session, user.station_id)
     return [_shift_public(row) for row in rows]
 
 
@@ -157,8 +158,14 @@ def create_template(session: Session, user: User, payload: ShiftWrite) -> ShiftP
         payload.ends_at,
         payload.grace_minutes,
     )
+    from stations.shift_timing import station_local_today
+
+    today = station_local_today(session, user.station_id)
     current = session.exec(
-        select(ShiftTemplate).where(ShiftTemplate.station_id == user.station_id)
+        select(ShiftTemplate).where(
+            ShiftTemplate.station_id == user.station_id,
+            ShiftTemplate.business_date == today,
+        )
     ).all()
     row = ShiftTemplate(
         station_id=user.station_id,
@@ -166,6 +173,7 @@ def create_template(session: Session, user: User, payload: ShiftWrite) -> ShiftP
         starts_at=starts,
         ends_at=ends,
         grace_minutes=grace,
+        business_date=today,
         is_active=payload.is_active,
         sort_order=len(current) + 1,
     )
@@ -306,6 +314,7 @@ def _price_public(row: FuelPrice) -> PricePublic:
 def _shift_public(row: ShiftTemplate) -> ShiftPublic:
     starts = _as_time(row.starts_at)
     ends = _as_time(row.ends_at)
+    day = row.business_date.isoformat() if row.business_date is not None else ""
     return ShiftPublic(
         id=str(row.id),
         name_ar=row.name_ar,
@@ -314,6 +323,7 @@ def _shift_public(row: ShiftTemplate) -> ShiftPublic:
         grace_minutes=row.grace_minutes,
         is_active=row.is_active,
         crosses_midnight=ends <= starts,
+        business_date=day,
     )
 
 

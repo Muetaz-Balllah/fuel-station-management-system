@@ -129,11 +129,20 @@ def test_new_price_keeps_the_old_row(client):
 
 def test_shift_template_rules(client):
     token = login(client, "manager", "Manager@12345")["access_token"]
-    listed = client.get("/api/v1/shift-templates", headers=auth_header(token))
-    assert listed.status_code == 200
-    by_name = {item["name_ar"]: item for item in listed.json()["items"]}
-    assert by_name["صباحية"]["crosses_midnight"] is False
-    assert by_name["مسائية"]["crosses_midnight"] is True
+    morning = client.post(
+        "/api/v1/shift-templates",
+        headers=auth_header(token),
+        json={"name_ar": "صباحية", "starts_at": "08:00", "ends_at": "16:00", "grace_minutes": 10},
+    )
+    assert morning.status_code == 201
+    assert morning.json()["crosses_midnight"] is False
+    evening = client.post(
+        "/api/v1/shift-templates",
+        headers=auth_header(token),
+        json={"name_ar": "مسائية", "starts_at": "16:00", "ends_at": "00:00", "grace_minutes": 10},
+    )
+    assert evening.status_code == 201
+    assert evening.json()["crosses_midnight"] is True
     empty = client.post(
         "/api/v1/shift-templates",
         headers=auth_header(token),

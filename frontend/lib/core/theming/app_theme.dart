@@ -33,6 +33,10 @@ abstract final class AppTheme {
         filled: true,
         fillColor: AppColors.surface,
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        hintStyle: textTheme.bodyLarge?.copyWith(
+          color: AppColors.onSurfaceVariant.withValues(alpha: 0.38),
+          fontWeight: FontWeight.w400,
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(4),
           borderSide: const BorderSide(color: AppColors.outlineVariant),

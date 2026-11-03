@@ -193,9 +193,9 @@ class _FormCard extends StatelessWidget {
                 key: const Key('login-username'),
                 controller: username,
                 textInputAction: TextInputAction.next,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   hintText: 'أدخل اسم المستخدم',
-                  prefixIcon: Icon(Icons.person_outline),
+                  prefixIcon: Icon(Icons.person_outline, color: AppColors.onSurfaceVariant.withValues(alpha: 0.55)),
                 ),
               ),
               const SizedBox(height: 16),
@@ -212,13 +212,26 @@ class _FormCard extends StatelessWidget {
                 key: const Key('login-password'),
                 controller: password,
                 obscureText: obscure,
+                obscuringCharacter: '•',
+                style: TextStyle(
+                  color: AppColors.onSurface,
+                  letterSpacing: obscure ? 2 : 0,
+                ),
                 onSubmitted: (_) => onSubmit(),
                 decoration: InputDecoration(
-                  hintText: '••••••••',
-                  prefixIcon: const Icon(Icons.lock_outline),
+                  hintText: 'أدخل كلمة المرور',
+                  hintStyle: TextStyle(
+                    color: AppColors.onSurfaceVariant.withValues(alpha: 0.35),
+                    letterSpacing: 2,
+                    fontWeight: FontWeight.w300,
+                  ),
+                  prefixIcon: Icon(Icons.lock_outline, color: AppColors.onSurfaceVariant.withValues(alpha: 0.55)),
                   suffixIcon: IconButton(
                     onPressed: onToggleObscure,
-                    icon: Icon(obscure ? Icons.visibility : Icons.visibility_off),
+                    icon: Icon(
+                      obscure ? Icons.visibility : Icons.visibility_off,
+                      color: AppColors.onSurfaceVariant.withValues(alpha: 0.55),
+                    ),
                   ),
                 ),
               ),

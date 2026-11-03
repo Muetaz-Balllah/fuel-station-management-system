@@ -11,7 +11,7 @@ from sqlmodel import Session
 from db import engine
 from main import app
 from supply.models import SupplyOrder
-from tests.helpers import auth_header, login
+from tests.helpers import auth_header, ensure_shift_template, login
 from utils import utcnow
 
 
@@ -74,8 +74,7 @@ def test_dashboard_matches_approved_duty_inventory_and_staff(client):
         json={"code": "N1", "label": "يمين", "initial_meter": "1000.000"},
     )
     assert nozzle.status_code == 201, nozzle.text
-    templates = client.get("/api/v1/shift-templates", headers=auth_header(token)).json()["items"]
-    morning = next(item for item in templates if item["name_ar"] == "صباحية")
+    morning = ensure_shift_template(client, token)
     day = "2026-12-15"
     shift = client.post(
         "/api/v1/sessions",

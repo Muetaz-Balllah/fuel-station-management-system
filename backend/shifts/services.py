@@ -949,11 +949,9 @@ def _session_block_reason(session: Session, shift: ShiftSession | None, template
 
 
 def _operator_shifts(session: Session, user: User, today) -> list[dict]:
-    templates = session.exec(
-        select(ShiftTemplate)
-        .where(ShiftTemplate.station_id == user.station_id)
-        .order_by(ShiftTemplate.sort_order, ShiftTemplate.name_ar)
-    ).all()
+    from stations.shift_timing import today_plannable_templates
+
+    templates = today_plannable_templates(session, user.station_id)
     rows = []
     for template in templates:
         shift = session.exec(

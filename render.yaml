@@ -1,0 +1,20 @@
+# Render Blueprint: Flutter Web static site only.
+# API stays on Koyeb (backend/Dockerfile). Mobile apps are built locally — no Render service.
+#
+# Dashboard alternative: New → Static Site → rootDir frontend, publish build/web,
+# build: bash scripts/render_build.sh, env API_BASE_URL.
+
+services:
+  - type: web
+    name: fuel-station-web
+    runtime: static
+    rootDir: frontend
+    buildCommand: bash scripts/render_build.sh
+    staticPublishPath: build/web
+    envVars:
+      - key: API_BASE_URL
+        sync: false
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html

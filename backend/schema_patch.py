@@ -14,6 +14,7 @@ def apply_sqlite_patches(engine: Engine) -> None:
         ("suppliers", "logo_url", "ALTER TABLE suppliers ADD COLUMN logo_url VARCHAR(300)"),
         ("users", "photo_url", "ALTER TABLE users ADD COLUMN photo_url VARCHAR(300)"),
         ("shift_duties", "rostered_user_id", "ALTER TABLE shift_duties ADD COLUMN rostered_user_id VARCHAR(36)"),
+        ("shift_templates", "business_date", "ALTER TABLE shift_templates ADD COLUMN business_date DATE"),
     ]
     with engine.begin() as conn:
         for table, column, ddl in patches:

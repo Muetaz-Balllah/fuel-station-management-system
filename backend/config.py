@@ -1,4 +1,16 @@
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def _normalize_database_url(url: str) -> str:
+    """Neon and other hosts often give postgresql://; SQLModel needs postgresql+psycopg://."""
+    if url.startswith("postgresql+psycopg://"):
+        return url
+    if url.startswith("postgresql://"):
+        return "postgresql+psycopg://" + url.removeprefix("postgresql://")
+    if url.startswith("postgres://"):
+        return "postgresql+psycopg://" + url.removeprefix("postgres://")
+    return url
 
 
 class Settings(BaseSettings):
@@ -29,6 +41,13 @@ class Settings(BaseSettings):
     seed_demo_assets: bool = True
     cors_origins: str = "*"
     app_name: str = "Fuel Station Management System"
+
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def _coerce_database_url(cls, value: object) -> object:
+        if isinstance(value, str):
+            return _normalize_database_url(value)
+        return value
 
 
 settings = Settings()

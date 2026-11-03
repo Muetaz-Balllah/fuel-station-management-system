@@ -4,7 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from main import app
-from tests.helpers import auth_header, login
+from tests.helpers import auth_header, ensure_shift_template, login
 
 
 @pytest.fixture()
@@ -34,8 +34,7 @@ def _user(client, token: str, name: str, username: str) -> str:
 
 
 def _morning(client, token: str, day: str) -> dict:
-    templates = client.get("/api/v1/shift-templates", headers=auth_header(token)).json()["items"]
-    template = next(item for item in templates if item["name_ar"] == "صباحية")
+    template = ensure_shift_template(client, token)
     opened = client.post(
         "/api/v1/sessions",
         headers=auth_header(token),
@@ -141,8 +140,13 @@ def test_maintenance_pump_cannot_be_assigned(client):
 
 def test_evening_template_ends_the_next_day(client):
     token = _manager(client)
-    templates = client.get("/api/v1/shift-templates", headers=auth_header(token)).json()["items"]
-    evening = next(item for item in templates if item["name_ar"] == "مسائية")
+    evening = ensure_shift_template(
+        client,
+        token,
+        name_ar="مسائية",
+        starts_at="16:00",
+        ends_at="00:00",
+    )
     opened = client.post(
         "/api/v1/sessions",
         headers=auth_header(token),

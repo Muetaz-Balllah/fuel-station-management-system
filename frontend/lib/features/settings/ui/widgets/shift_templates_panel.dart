@@ -14,7 +14,10 @@ class ShiftTemplatesPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<SettingsCubit>().state;
-    return ListView(
+    ShiftRoster.pruneExcept(state.templates.map((item) => item.id));
+    return RefreshIndicator(
+      onRefresh: () => context.read<SettingsCubit>().load(silent: true),
+      child: ListView(
       padding: managerPagePadding(context),
       children: [
         LayoutBuilder(
@@ -45,11 +48,15 @@ class ShiftTemplatesPanel extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         const Text(
-          'قوالب الورديات النشطة في المحطة — المواعيد والربط بالموظفين يظهران أدناه. الورديات المنتهية تُغلق تلقائياً في جدول التشغيل.',
+          'كل وردية تُنشأ لهذا اليوم فقط. بعد انتهاء وقتها لا تظهر هنا — أضف وردية جديدة عند الحاجة.',
           style: TextStyle(color: AppColors.onSurfaceVariant, height: 1.5),
         ),
         const SizedBox(height: 16),
-        if (state.templates.isEmpty) const Text('لا توجد ورديات بعد.'),
+        if (state.templates.isEmpty)
+          const Text(
+            'لا توجد ورديات لليوم. استخدم «إضافة وردية» لبدء مناوبة جديدة.',
+            style: TextStyle(color: AppColors.onSurfaceVariant, height: 1.5),
+          ),
         for (final template in state.templates)
           _ShiftTemplateCard(
             template: template,
@@ -58,6 +65,7 @@ class ShiftTemplatesPanel extends StatelessWidget {
             onDelete: () => _confirmDelete(context, template),
           ),
       ],
+      ),
     );
   }
 
@@ -193,7 +201,7 @@ class _ShiftTemplateCard extends StatelessWidget {
                             if (template.crossesMidnight) const _ShiftChip(icon: Icons.nightlight_round, label: 'تمتد لليوم التالي'),
                             _ShiftChip(
                               icon: template.isActive ? Icons.check_circle_outline : Icons.pause_circle_outline,
-                              label: template.isActive ? 'نشطة في الجدول' : 'متوقفة',
+                              label: template.isActive ? 'نشطة' : 'متوقفة',
                               highlight: template.isActive,
                             ),
                           ],
@@ -245,10 +253,10 @@ class _ShiftTemplateCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('هيكل الربط والموظفون', style: TextStyle(fontWeight: FontWeight.w700)),
+                      const Text('الموظفون المرتبطون', style: TextStyle(fontWeight: FontWeight.w700)),
                       const SizedBox(height: 6),
                       Text(
-                        crew.isEmpty ? 'لم يُربط موظفون بعد — استخدم الزر أدناه لتحديد مناوبي هذه الوردية.' : crew.join(' • '),
+                        crew.isEmpty ? 'لم يُربط موظفون بعد.' : crew.join(' • '),
                         style: const TextStyle(color: AppColors.onSurfaceVariant, height: 1.5),
                       ),
                     ],
@@ -285,10 +293,10 @@ class _ShiftTemplateCard extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      const Text('اختر مشغلي الوردية الذين سيظهر لهم هذا الموعد في جدولهم.'),
+                      const Text('اختر مشغلي هذه الوردية.'),
                       const SizedBox(height: 8),
                       if (employees.isEmpty)
-                        const Text('لا يوجد مشغلو وردية مسجلون بعد. أضف اسماً يدوياً.')
+                        const Text('لا يوجد مشغلو وردية مسجلون بعد.')
                       else
                         for (final employee in employees)
                           CheckboxListTile(

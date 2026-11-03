@@ -57,6 +57,7 @@ class ShiftTemplate(SQLModel, table=True):
     starts_at: time
     ends_at: time
     grace_minutes: int = 10
+    business_date: date | None = Field(default=None, index=True)
     is_active: bool = True
     sort_order: int = 0
     created_at: datetime = Field(default_factory=utcnow)

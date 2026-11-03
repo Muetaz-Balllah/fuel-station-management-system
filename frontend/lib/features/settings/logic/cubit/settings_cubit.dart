@@ -57,8 +57,10 @@ class SettingsCubit extends Cubit<SettingsState> {
 
   final SettingsRepository _repository;
 
-  Future<void> load() async {
-    emit(state.copyWith(loading: true, clearError: true));
+  Future<void> load({bool silent = false}) async {
+    if (!silent) {
+      emit(state.copyWith(loading: true, clearError: true));
+    }
     try {
       final station = await _repository.fetchStation();
       final users = await _repository.fetchUsers(search: state.userQuery, role: state.roleFilter);

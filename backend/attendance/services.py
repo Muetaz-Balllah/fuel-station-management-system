@@ -39,6 +39,7 @@ _DUTY_STATUS_LABELS = {
 def schedule_window(session: Session, user: User, date_from: date, date_to: date) -> list[dict]:
     if date_to < date_from:
         raise AppError("VALIDATION_ERROR", "نهاية المدى قبل بدايته.", 422)
+    sweep_expired_sessions(session, user.station_id)
     templates = session.exec(
         select(ShiftTemplate)
         .where(ShiftTemplate.station_id == user.station_id)
@@ -57,6 +58,8 @@ def schedule_window(session: Session, user: User, date_from: date, date_to: date
     while cursor <= date_to:
         items = []
         for template in templates:
+            if template.business_date != cursor:
+                continue
             shift = by_key.get((cursor, template.id))
             if shift is None:
                 enabled = template.is_active
@@ -413,11 +416,9 @@ def summary(session: Session, user: User, business_date: date) -> dict:
 
 
 def options(session: Session, user: User) -> dict:
-    templates = session.exec(
-        select(ShiftTemplate)
-        .where(ShiftTemplate.station_id == user.station_id, ShiftTemplate.is_active == True)  # noqa: E712
-        .order_by(ShiftTemplate.sort_order)
-    ).all()
+    from stations.shift_timing import today_plannable_templates
+
+    templates = today_plannable_templates(session, user.station_id)
     users = session.exec(
         select(User).where(User.station_id == user.station_id, User.is_active == True).order_by(User.full_name)  # noqa: E712
     ).all()

@@ -1,11 +1,11 @@
-from datetime import date, time
+from datetime import date
 from decimal import Decimal
 
 from sqlmodel import Session, select
 
 from core.security import hash_password
 from enums import PermissionCode, RoleCode
-from stations.models import FuelPrice, FuelProduct, ShiftTemplate, Station
+from stations.models import FuelPrice, FuelProduct, Station
 from users.models import Permission, Role, RolePermission, User
 
 # The mock prints 2024-12-31, which is already past. The live station is licensed
@@ -186,29 +186,5 @@ def _ensure_catalog(session: Session, station: Station, admin_username: str) -> 
                 product_id=gasoline.id,
                 price_per_liter=Decimal("0.150"),
                 created_by=admin.id if admin else None,
-            )
-        )
-    templates = session.exec(
-        select(ShiftTemplate).where(ShiftTemplate.station_id == station.id)
-    ).first()
-    if templates is None:
-        session.add(
-            ShiftTemplate(
-                station_id=station.id,
-                name_ar="صباحية",
-                starts_at=time(8, 0),
-                ends_at=time(16, 0),
-                grace_minutes=10,
-                sort_order=1,
-            )
-        )
-        session.add(
-            ShiftTemplate(
-                station_id=station.id,
-                name_ar="مسائية",
-                starts_at=time(16, 0),
-                ends_at=time(0, 0),
-                grace_minutes=10,
-                sort_order=2,
             )
         )

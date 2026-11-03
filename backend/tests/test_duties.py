@@ -1,7 +1,7 @@
 from fastapi.testclient import TestClient
 
 from main import app
-from tests.helpers import auth_header, login
+from tests.helpers import auth_header, ensure_shift_template, login
 
 
 def client_app():
@@ -48,8 +48,7 @@ def _gasoline(client, token: str) -> str:
 
 
 def _session(client, token: str, day: str, name: str = "صباحية") -> dict:
-    templates = client.get("/api/v1/shift-templates", headers=auth_header(token)).json()["items"]
-    template = next(item for item in templates if item["name_ar"] == name)
+    template = ensure_shift_template(client, token, name_ar=name)
     opened = client.post(
         "/api/v1/sessions",
         headers=auth_header(token),

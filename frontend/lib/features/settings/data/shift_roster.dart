@@ -20,11 +20,31 @@ class ShiftRoster {
 
   static List<ShiftAssignment> get saved => _saved.values.toList();
 
+  static Iterable<String> get templateIds => _saved.keys;
+
+  static void pruneExcept(Iterable<String> keepIds) {
+    final keep = keepIds.toSet();
+    final stale = _saved.keys.where((id) => !keep.contains(id)).toList();
+    if (stale.isEmpty) {
+      return;
+    }
+    for (final id in stale) {
+      _saved.remove(id);
+    }
+    updates.notifyListeners();
+  }
+
   static ShiftAssignment? of(String templateId) => _saved[templateId];
 
   static void save(ShiftAssignment assignment) {
     _saved[assignment.templateId] = assignment;
     updates.notifyListeners();
+  }
+
+  static void remove(String templateId) {
+    if (_saved.remove(templateId) != null) {
+      updates.notifyListeners();
+    }
   }
 
   static List<ShiftAssignment> timetable() {

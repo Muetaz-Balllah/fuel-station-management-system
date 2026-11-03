@@ -1,8 +1,5 @@
-# Render Blueprint: API (Docker) + Flutter Web (static).
-# New → Blueprint → connect repo. Set secret env vars in the dashboard when prompted.
-#
-# If Git root is the monorepo folder, paths below are correct.
-# Adjust rootDir / dockerContext if your repo layout differs.
+# Render Blueprint: API only (Docker). Flutter Web → Vercel (frontend/vercel.json).
+# New → Blueprint → connect repo. Set secret env vars when prompted.
 
 services:
   - type: web
@@ -33,17 +30,3 @@ services:
         value: "true"
       - key: CORS_ORIGINS
         sync: false
-
-  - type: web
-    name: fuel-station-web
-    runtime: static
-    rootDir: frontend
-    buildCommand: bash scripts/render_build.sh
-    staticPublishPath: build/web
-    envVars:
-      - key: API_BASE_URL
-        sync: false
-    routes:
-      - type: rewrite
-        source: /*
-        destination: /index.html

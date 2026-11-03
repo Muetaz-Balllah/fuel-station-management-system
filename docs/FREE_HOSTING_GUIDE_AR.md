@@ -4,7 +4,7 @@
 
 | الجزء | الخدمة | الدور |
 |--------|--------|--------|
-| واجهة الويب (Flutter Web) | **Render** (Static Site) | المتصفح للمدير والمشغّل |
+| واجهة الويب (Flutter Web) | **[Vercel](https://vercel.com/)** | المتصفح للمدير والمشغّل |
 | خادم API (FastAPI) | **Render** (Docker Web Service) | منطق النظام و REST API |
 | قاعدة البيانات | **Neon** | PostgreSQL |
 | جلسات تسجيل الدخول | **Upstash** | Redis |
@@ -25,15 +25,16 @@
 | مفاتيح S3 | `AWS_ENDPOINT_URL_S3`, `S3_BUCKET`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | Render (API) |
 | `JWT_SECRET` | 32+ حرف عشوائي | Render (API) |
 | كلمات مرور seed (اختياري) | `SEED_*_PASSWORD` | Render (API) |
-| رابط API العام | `https://fuel-station-api.onrender.com` | Static Site → `API_BASE_URL` + بناء الهاتف |
-| رابط موقع الويب | `https://fuel-station-web.onrender.com` | Render (API) → `CORS_ORIGINS` |
-| حسابات المنصات | GitHub للربط | Neon / Upstash / Render |
+| رابط API العام | `https://fuel-station-api.onrender.com` | Vercel → `API_BASE_URL` + بناء الهاتف |
+| رابط موقع الويب | `https://your-project.vercel.app` | Render (API) → `CORS_ORIGINS` |
+| حسابات المنصات | GitHub للربط | Neon / Upstash / Render / Vercel |
 
 قوالب المتغيرات:
 
 - `backend/.env.production.example` — متغيرات خدمة API على Render
-- `frontend/.env.deploy.example` — `API_BASE_URL` لموقع Flutter
-- `render.yaml` — Blueprint: API (Docker) + Flutter Web (static)
+- `frontend/.env.deploy.example` — `API_BASE_URL` على Vercel
+- `frontend/vercel.json` — إعداد بناء Flutter Web على Vercel
+- `render.yaml` — Blueprint: API (Docker) فقط
 
 ---
 
@@ -43,8 +44,8 @@
 2. **Upstash** — Redis → `REDIS_URL`
 3. **Render** — Web Service (Docker) للـ API + المتغيرات
 4. **اختبار API** — `GET /api/v1/health`
-5. **Render** — Static Site لـ Flutter Web + `API_BASE_URL`
-6. **Render (API)** — `CORS_ORIGINS` = رابط موقع Flutter
+5. **Vercel** — مشروع Flutter Web + `API_BASE_URL`
+6. **Render (API)** — `CORS_ORIGINS` = رابط Vercel
 7. **(اختياري)** بناء APK/IPA للهاتف بنفس `API_BASE_URL`
 8. **اختبار نهائي** — متصفح + هاتف
 
@@ -100,7 +101,7 @@
 | `JWT_SECRET` | 32+ حرف |
 | `AUTO_CREATE_TABLES` | `true` |
 | `SEED_ON_STARTUP` | `true` أول مرة، ثم `false` |
-| `CORS_ORIGINS` | مؤقتاً `*`؛ بعد نشر Flutter = رابط Static Site |
+| `CORS_ORIGINS` | مؤقتاً `*`؛ بعد نشر Vercel = رابط `*.vercel.app` |
 | `AWS_ENDPOINT_URL_S3` | S3-compatible |
 | `S3_BUCKET` | اسم الـ bucket |
 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | مفاتيح التخزين |
@@ -119,7 +120,7 @@ SEED_ON_STARTUP=true
 **بعد نشر Flutter Web:**
 
 ```env
-CORS_ORIGINS=https://fuel-station-web.onrender.com
+CORS_ORIGINS=https://your-project.vercel.app
 SEED_ON_STARTUP=false
 ```
 
@@ -133,64 +134,57 @@ https://YOUR-API.onrender.com/api/v1/health
 
 ---
 
-## 4) Render — Flutter Web (Static Site)
+## 4) Vercel — Flutter Web
+
+نعم، **Flutter Web** static يعمل على [Vercel](https://vercel.com/) (مثل أي موقع SPA).
+
+**دليل مختصر خطوة بخطوة:** [`VERCEL_DEPLOY_AR.md`](VERCEL_DEPLOY_AR.md) (مهم: لا Next.js ولا `API_UPSTREAM`).
 
 ### الملفات في المشروع
 
 | الملف | الغرض |
 |--------|--------|
-| `render.yaml` | Blueprint (Static Site + rewrite للـ SPA) |
-| `frontend/scripts/render_build.sh` | تثبيت Flutter (إن لزم) + `flutter build web` + `_redirects` |
+| `frontend/vercel.json` | أمر البناء + `build/web` + rewrite لـ SPA |
+| `frontend/scripts/vercel_build.sh` | يستدعي `build_web.sh` (تنزيل Flutter إن لزم + `API_BASE_URL`) |
 
-### الطريقة أ — Blueprint
+### النشر
 
-1. [https://dashboard.render.com](https://dashboard.render.com) → **New** → **Blueprint**.
-2. اربط الم repo؛ Render يقرأ **`render.yaml`** من الجذر (`fuel-station-management-system/render.yaml`).
-3. عند إنشاء الخدمة، أضف **`API_BASE_URL`** = رابط API على Render (بدون `/` في النهاية).
-
-### الطريقة ب — يدوياً من لوحة Render
-
-1. **New** → **Static Site** → Git repo.
-2. **Root Directory:** `frontend` (أو `fuel-station-management-system/frontend` حسب جذر Git).
-3. **Build Command:** `bash scripts/render_build.sh`
-4. **Publish Directory:** `build/web`
-5. **Environment Variables:**
+1. [https://vercel.com](https://vercel.com) → **Add New Project** → GitHub.
+2. **Root Directory:** `frontend` (أو `fuel-station-management-system/frontend`).
+3. Framework Preset: **Other** (الإعدادات تُقرأ من `vercel.json`).
+4. **Environment Variables** (Production):
 
 | Key | Value |
 |-----|--------|
-| `API_BASE_URL` | `https://YOUR-API.onrender.com` |
+| `API_BASE_URL` | `https://YOUR-API.onrender.com` (بدون `/` في النهاية) |
 
-6. **Create Static Site**.
+5. **Deploy**.
 
-### SPA (توجيه المسارات)
+### SPA
 
-السكربت يضيف `build/web/_redirects` و`render.yaml` يعرّف rewrite إلى `index.html`.
+`vercel.json` يوجّه كل المسارات إلى `index.html` حتى يعمل ت routing في Flutter.
 
 ### ما تحفظه
 
-- URL مثل: `https://fuel-station-web.onrender.com`
+- رابط مثل: `https://your-project.vercel.app`
 
 ### بعد النشر
 
-1. خدمة API على Render → `CORS_ORIGINS=https://your-flutter-site.onrender.com`
-2. **Manual Deploy** أو push لإعادة تشغيل API إن لزم.
+1. Render (API) → `CORS_ORIGINS=https://your-project.vercel.app`
+2. أعد deploy للـ API على Render.
 
-### بناء محلي (إذا فشل البناء على Render أو كان بطيئاً)
+### بناء محلي + Vercel CLI (بديل)
 
 ```bash
 cd frontend
-flutter pub get
 flutter build web --release --dart-define=API_BASE_URL=https://YOUR-API.onrender.com
-echo /*    /index.html   200 > build/web/_redirects
+npx vercel deploy build/web --prod
 ```
 
-ثم ارفع مجلد `build/web` عبر Render **Manual Deploy** أو Git مع أ artefact — أو غيّر Build Command مؤقتاً لنسخ مخرجات جاهزة (الطريقة المعتادة تبقى السكربت على Render).
+### ملاحظات
 
-### ملاحظات Render المجانية
-
-- Static Sites على الخطة المجانية مناسبة للعرض والتجربة.
-- أول build قد يستغرق وقتاً (تنزيل Flutter SDK).
-- الخدمات المجانية قد «تنام»؛ أول زيارة للموقع قد تأخذ ثوانٍ.
+- أول build على Vercel قد يستغرق وقتاً (clone Flutter SDK).
+- كل **Redeploy** بعد تغيير `API_BASE_URL` يعيد بناء الويب بالعنوان الجديد.
 
 ---
 
@@ -235,9 +229,9 @@ flutter run --dart-define=API_BASE_URL=http://192.168.x.x:8000
 
 - [ ] `/api/v1/health` → ok + postgresql + redis ok
 
-### موقع الويب (Render)
+### موقع الويب (Vercel)
 
-- [ ] فتح `https://....onrender.com` — شاشة الدخول
+- [ ] فتح `https://....vercel.app` — شاشة الدخول
 - [ ] تسجيل دخول بدون أخطاء CORS (F12)
 
 ### الهاتف (اختياري)
@@ -248,7 +242,7 @@ flutter run --dart-define=API_BASE_URL=http://192.168.x.x:8000
 ### أمان
 
 - [ ] `SEED_ON_STARTUP=false`
-- [ ] `CORS_ORIGINS` = رابط Render فقط (ليس `*`)
+- [ ] `CORS_ORIGINS` = رابط Vercel فقط (ليس `*`)
 - [ ] كلمات مرور seed تغيّرت
 
 ---
@@ -258,10 +252,10 @@ flutter run --dart-define=API_BASE_URL=http://192.168.x.x:8000
 | العرض | الحل |
 |--------|------|
 | `redis: down` | `REDIS_URL` = `rediss://` من Upstash |
-| CORS في المتصفح | `CORS_ORIGINS` = رابط Render كامل |
-| الويب يتصل بـ localhost | أعد deploy Render مع `API_BASE_URL` |
+| CORS في المتصفح | `CORS_ORIGINS` = رابط Vercel كامل |
+| الويب يتصل بـ localhost | أعد deploy Vercel مع `API_BASE_URL` |
 | الهاتف لا يتصل | تحقق من HTTPS و URL وقت `flutter build` |
-| Render build failed | راجع Logs؛ أو ابنِ web محلياً |
+| Vercel build failed | راجع Build Logs؛ أو ابنِ web محلياً و `vercel deploy` |
 | Neon بطيء أول طلب | cold start — أعد المحاولة |
 | `storage_ok: down` | تحقق من S3 bucket والمفاتيح و`AWS_ENDPOINT_URL_S3` |
 | صور لا تظهر | health للتخزين؛ أو `S3_PUBLIC_BASE_URL` / مسار `/api/v1/media/` |
@@ -291,8 +285,9 @@ flutter run -d chrome --dart-define=API_BASE_URL=http://127.0.0.1:8000
 |--------|--------|
 | `Dockerfile` | Render Web Service (Docker) |
 | `backend/.env.production.example` | متغيرات API |
-| `render.yaml` | Blueprint: API + Static Site |
-| `frontend/scripts/render_build.sh` | بناء Flutter Web |
-| `frontend/.env.deploy.example` | `API_BASE_URL` لـ Render |
+| `render.yaml` | Blueprint: API فقط |
+| `frontend/vercel.json` | استضافة Flutter Web |
+| `frontend/scripts/vercel_build.sh` | بناء web على Vercel |
+| `frontend/.env.deploy.example` | `API_BASE_URL` لـ Vercel |
 
 مرجع إنجليزي مختصر: [`../DEPLOYMENT.md`](../DEPLOYMENT.md).

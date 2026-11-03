@@ -2,8 +2,8 @@
 
 Use this when uploading the project to hosting for the first test run.
 
-**Free tier (Neon + Upstash + Render API + Render Flutter web):** step-by-step guide in Arabic — [`docs/FREE_HOSTING_GUIDE_AR.md`](docs/FREE_HOSTING_GUIDE_AR.md).  
-Templates: `backend/.env.production.example`, `Dockerfile` (repo root), `render.yaml`, `frontend/scripts/render_build.sh`.  
+**Free tier (Neon + Upstash + Render API + Vercel Flutter web):** step-by-step guide in Arabic — [`docs/FREE_HOSTING_GUIDE_AR.md`](docs/FREE_HOSTING_GUIDE_AR.md).  
+Templates: `backend/.env.production.example`, `Dockerfile` (repo root), `render.yaml`, `frontend/vercel.json`.  
 Flutter **mobile/desktop** builds run on devices — no static host; use the same `API_BASE_URL` when building releases.
 
 ## Backend
@@ -25,7 +25,7 @@ Flutter **mobile/desktop** builds run on devices — no static host; use the sam
 
 ## Frontend (Flutter)
 
-**Web (Render static site):** set `API_BASE_URL` in Render; build uses `frontend/scripts/render_build.sh`. See `render.yaml`.
+**Web (Vercel):** set `API_BASE_URL` in Vercel; build uses `frontend/vercel.json` and `scripts/vercel_build.sh`.
 
 **Mobile / desktop (no hosting):** build with the same API URL, e.g.  
 `flutter build apk --release --dart-define=API_BASE_URL=https://your-api.example.com`

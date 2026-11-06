@@ -6,6 +6,7 @@ import 'package:frontend/features/settings/data/models/settings_models.dart';
 import 'package:frontend/features/settings/data/shift_roster.dart';
 import 'package:frontend/features/settings/logic/cubit/settings_cubit.dart';
 import 'package:frontend/core/widgets/app_dialog.dart';
+import 'package:frontend/core/widgets/dispose_controllers.dart';
 import 'package:frontend/features/settings/ui/widgets/shift_template_form.dart';
 
 class ShiftTemplatesPanel extends StatelessWidget {
@@ -18,58 +19,63 @@ class ShiftTemplatesPanel extends StatelessWidget {
     return RefreshIndicator(
       onRefresh: () => context.read<SettingsCubit>().load(silent: true),
       child: ListView(
-      padding: managerPagePadding(context),
-      children: [
-        LayoutBuilder(
-          builder: (context, constraints) {
-            const heading = Text(
-              'إعدادات الورديات ومواعيد المناوبات',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
-            );
-            final addButton = FilledButton.icon(
-              key: const Key('shift-add'),
-              onPressed: () => _openForm(context, null),
-              icon: const Icon(Icons.add),
-              label: const Text('إضافة وردية'),
-            );
-            if (constraints.maxWidth < 560) {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [heading, const SizedBox(height: 12), addButton],
+        padding: managerPagePadding(context),
+        children: [
+          LayoutBuilder(
+            builder: (context, constraints) {
+              const heading = Text(
+                'إعدادات الورديات ومواعيد المناوبات',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
               );
-            }
-            return Row(
-              children: [
-                const Expanded(child: heading),
-                addButton,
-              ],
-            );
-          },
-        ),
-        const SizedBox(height: 8),
-        const Text(
-          'كل وردية تُنشأ لهذا اليوم فقط. بعد انتهاء وقتها لا تظهر هنا — أضف وردية جديدة عند الحاجة.',
-          style: TextStyle(color: AppColors.onSurfaceVariant, height: 1.5),
-        ),
-        const SizedBox(height: 16),
-        if (state.templates.isEmpty)
+              final addButton = FilledButton.icon(
+                key: const Key('shift-add'),
+                onPressed: () => _openForm(context, null),
+                icon: const Icon(Icons.add),
+                label: const Text('إضافة وردية'),
+              );
+              if (constraints.maxWidth < 560) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [heading, const SizedBox(height: 12), addButton],
+                );
+              }
+              return Row(
+                children: [
+                  const Expanded(child: heading),
+                  addButton,
+                ],
+              );
+            },
+          ),
+          const SizedBox(height: 8),
           const Text(
-            'لا توجد ورديات لليوم. استخدم «إضافة وردية» لبدء مناوبة جديدة.',
+            'كل وردية تُنشأ لهذا اليوم فقط. بعد انتهاء وقتها لا تظهر هنا — أضف وردية جديدة عند الحاجة.',
             style: TextStyle(color: AppColors.onSurfaceVariant, height: 1.5),
           ),
-        for (final template in state.templates)
-          _ShiftTemplateCard(
-            template: template,
-            employees: state.users.where((user) => user.isActive && user.roleCode == 'operator').toList(),
-            onEdit: () => _openForm(context, template),
-            onDelete: () => _confirmDelete(context, template),
-          ),
-      ],
+          const SizedBox(height: 16),
+          if (state.templates.isEmpty)
+            const Text(
+              'لا توجد ورديات لليوم. استخدم «إضافة وردية» لبدء مناوبة جديدة.',
+              style: TextStyle(color: AppColors.onSurfaceVariant, height: 1.5),
+            ),
+          for (final template in state.templates)
+            _ShiftTemplateCard(
+              template: template,
+              employees: state.users
+                  .where((user) => user.isActive && user.roleCode == 'operator')
+                  .toList(),
+              onEdit: () => _openForm(context, template),
+              onDelete: () => _confirmDelete(context, template),
+            ),
+        ],
       ),
     );
   }
 
-  Future<void> _openForm(BuildContext context, ShiftTemplateItem? existing) async {
+  Future<void> _openForm(
+    BuildContext context,
+    ShiftTemplateItem? existing,
+  ) async {
     final cubit = context.read<SettingsCubit>();
     await showDialog<void>(
       context: context,
@@ -93,15 +99,23 @@ class ShiftTemplatesPanel extends StatelessWidget {
     );
   }
 
-  Future<void> _confirmDelete(BuildContext context, ShiftTemplateItem template) async {
+  Future<void> _confirmDelete(
+    BuildContext context,
+    ShiftTemplateItem template,
+  ) async {
     final cubit = context.read<SettingsCubit>();
     await showAppDialog<void>(
       context: context,
       title: 'حذف الوردية',
       icon: Icons.delete_outline,
-      content: Text('هل تريد حذف «${template.nameAr}» نهائياً؟ لا يمكن التراجع.'),
+      content: Text(
+        'هل تريد حذف «${template.nameAr}» نهائياً؟ لا يمكن التراجع.',
+      ),
       actionsBuilder: (dialogContext) => [
-        TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('إلغاء')),
+        TextButton(
+          onPressed: () => Navigator.pop(dialogContext),
+          child: const Text('إلغاء'),
+        ),
         FilledButton(
           key: Key('shift-delete-${template.id}'),
           onPressed: () async {
@@ -115,7 +129,12 @@ class ShiftTemplatesPanel extends StatelessWidget {
                 title: 'تعذّر الحذف',
                 icon: Icons.error_outline,
                 content: Text(message),
-                actionsBuilder: (ctx) => [FilledButton(onPressed: () => Navigator.pop(ctx), child: const Text('حسناً'))],
+                actionsBuilder: (ctx) => [
+                  FilledButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text('حسناً'),
+                  ),
+                ],
               );
             }
           },
@@ -127,7 +146,11 @@ class ShiftTemplatesPanel extends StatelessWidget {
 }
 
 class _ShiftChip extends StatelessWidget {
-  const _ShiftChip({required this.icon, required this.label, this.highlight = false});
+  const _ShiftChip({
+    required this.icon,
+    required this.label,
+    this.highlight = false,
+  });
 
   final IconData icon;
   final String label;
@@ -140,14 +163,27 @@ class _ShiftChip extends StatelessWidget {
       decoration: BoxDecoration(
         color: highlight ? const Color(0xFFE7EEFF) : const Color(0xFFF1F5F9),
         borderRadius: BorderRadius.circular(99),
-        border: Border.all(color: highlight ? AppColors.primary : const Color(0xFFE2E8F0)),
+        border: Border.all(
+          color: highlight ? AppColors.primary : const Color(0xFFE2E8F0),
+        ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 14, color: highlight ? AppColors.primary : AppColors.onSurfaceVariant),
+          Icon(
+            icon,
+            size: 14,
+            color: highlight ? AppColors.primary : AppColors.onSurfaceVariant,
+          ),
           const SizedBox(width: 6),
-          Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: highlight ? AppColors.primary : AppColors.onSurface)),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: highlight ? AppColors.primary : AppColors.onSurface,
+            ),
+          ),
         ],
       ),
     );
@@ -172,7 +208,8 @@ class _ShiftTemplateCard extends StatelessWidget {
     return ListenableBuilder(
       listenable: ShiftRoster.updates,
       builder: (context, _) {
-        final crew = ShiftRoster.of(template.id)?.employeeNames ?? const <String>[];
+        final crew =
+            ShiftRoster.of(template.id)?.employeeNames ?? const <String>[];
         return Card(
           elevation: 0,
           shape: RoundedRectangleBorder(
@@ -190,17 +227,37 @@ class _ShiftTemplateCard extends StatelessWidget {
                     final titleBlock = Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(template.nameAr, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: AppColors.primary)),
+                        Text(
+                          template.nameAr,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 18,
+                            color: AppColors.primary,
+                          ),
+                        ),
                         const SizedBox(height: 8),
                         Wrap(
                           spacing: 8,
                           runSpacing: 8,
                           children: [
-                            _ShiftChip(icon: Icons.schedule, label: '${template.startsAt} – ${template.endsAt}'),
-                            _ShiftChip(icon: Icons.timer_outlined, label: 'مهلة ${template.graceMinutes} د'),
-                            if (template.crossesMidnight) const _ShiftChip(icon: Icons.nightlight_round, label: 'تمتد لليوم التالي'),
                             _ShiftChip(
-                              icon: template.isActive ? Icons.check_circle_outline : Icons.pause_circle_outline,
+                              icon: Icons.schedule,
+                              label:
+                                  '${template.startsAt} – ${template.endsAt}',
+                            ),
+                            _ShiftChip(
+                              icon: Icons.timer_outlined,
+                              label: 'مهلة ${template.graceMinutes} د',
+                            ),
+                            if (template.crossesMidnight)
+                              const _ShiftChip(
+                                icon: Icons.nightlight_round,
+                                label: 'تمتد لليوم التالي',
+                              ),
+                            _ShiftChip(
+                              icon: template.isActive
+                                  ? Icons.check_circle_outline
+                                  : Icons.pause_circle_outline,
                               label: template.isActive ? 'نشطة' : 'متوقفة',
                               highlight: template.isActive,
                             ),
@@ -215,30 +272,45 @@ class _ShiftTemplateCard extends StatelessWidget {
                           value: template.isActive,
                           onChanged: (value) {
                             context.read<SettingsCubit>().saveTemplate(
-                                  ShiftDraft(
-                                    nameAr: template.nameAr,
-                                    startsAt: template.startsAt,
-                                    endsAt: template.endsAt,
-                                    graceMinutes: template.graceMinutes,
-                                    isActive: value,
-                                  ),
-                                  id: template.id,
-                                );
+                              ShiftDraft(
+                                nameAr: template.nameAr,
+                                startsAt: template.startsAt,
+                                endsAt: template.endsAt,
+                                graceMinutes: template.graceMinutes,
+                                isActive: value,
+                              ),
+                              id: template.id,
+                            );
                           },
                         ),
-                        TextButton(onPressed: onEdit, child: const Text('تعديل')),
+                        TextButton(
+                          onPressed: onEdit,
+                          child: const Text('تعديل'),
+                        ),
                         IconButton(
                           key: Key('shift-delete-btn-${template.id}'),
                           tooltip: 'حذف الوردية',
                           onPressed: onDelete,
-                          icon: const Icon(Icons.delete_outline, color: AppColors.error),
+                          icon: const Icon(
+                            Icons.delete_outline,
+                            color: AppColors.error,
+                          ),
                         ),
                       ],
                     );
                     if (narrow) {
-                      return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [titleBlock, actions]);
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [titleBlock, actions],
+                      );
                     }
-                    return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [Expanded(child: titleBlock), actions]);
+                    return Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(child: titleBlock),
+                        actions,
+                      ],
+                    );
                   },
                 ),
                 const SizedBox(height: 12),
@@ -253,11 +325,19 @@ class _ShiftTemplateCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('الموظفون المرتبطون', style: TextStyle(fontWeight: FontWeight.w700)),
+                      const Text(
+                        'الموظفون المرتبطون',
+                        style: TextStyle(fontWeight: FontWeight.w700),
+                      ),
                       const SizedBox(height: 6),
                       Text(
-                        crew.isEmpty ? 'لم يُربط موظفون بعد.' : crew.join(' • '),
-                        style: const TextStyle(color: AppColors.onSurfaceVariant, height: 1.5),
+                        crew.isEmpty
+                            ? 'لم يُربط موظفون بعد.'
+                            : crew.join(' • '),
+                        style: const TextStyle(
+                          color: AppColors.onSurfaceVariant,
+                          height: 1.5,
+                        ),
                       ),
                     ],
                   ),
@@ -282,79 +362,88 @@ class _ShiftTemplateCard extends StatelessWidget {
     await showDialog<void>(
       context: context,
       builder: (dialogContext) {
-        return StatefulBuilder(
-          builder: (context, setLocal) {
-            return AlertDialog(
-              title: Text('تكليف موظفين — ${template.nameAr}'),
-              content: SizedBox(
-                width: 420,
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      const Text('اختر مشغلي هذه الوردية.'),
-                      const SizedBox(height: 8),
-                      if (employees.isEmpty)
-                        const Text('لا يوجد مشغلو وردية مسجلون بعد.')
-                      else
-                        for (final employee in employees)
-                          CheckboxListTile(
-                            contentPadding: EdgeInsets.zero,
-                            title: Text('${employee.fullName} • ${employee.employeeCode}'),
-                            value: selected.contains(employee.fullName),
-                            onChanged: (checked) {
-                              setLocal(() {
-                                if (checked ?? false) {
-                                  selected.add(employee.fullName);
-                                } else {
-                                  selected.remove(employee.fullName);
-                                }
-                              });
-                            },
+        return DisposeControllers(
+          controllers: [manual],
+          child: StatefulBuilder(
+            builder: (context, setLocal) {
+              return AlertDialog(
+                title: Text('تكليف موظفين — ${template.nameAr}'),
+                content: SizedBox(
+                  width: 420,
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const Text('اختر مشغلي هذه الوردية.'),
+                        const SizedBox(height: 8),
+                        if (employees.isEmpty)
+                          const Text('لا يوجد مشغلو وردية مسجلون بعد.')
+                        else
+                          for (final employee in employees)
+                            CheckboxListTile(
+                              contentPadding: EdgeInsets.zero,
+                              title: Text(
+                                '${employee.fullName} • ${employee.employeeCode}',
+                              ),
+                              value: selected.contains(employee.fullName),
+                              onChanged: (checked) {
+                                setLocal(() {
+                                  if (checked ?? false) {
+                                    selected.add(employee.fullName);
+                                  } else {
+                                    selected.remove(employee.fullName);
+                                  }
+                                });
+                              },
+                            ),
+                        TextField(
+                          controller: manual,
+                          decoration: const InputDecoration(
+                            labelText: 'اسم موظف إضافي',
                           ),
-                      TextField(
-                        controller: manual,
-                        decoration: const InputDecoration(labelText: 'اسم موظف إضافي'),
-                        onSubmitted: (value) {
-                          final name = value.trim();
-                          if (name.isEmpty) {
-                            return;
-                          }
-                          setLocal(() => selected.add(name));
-                          manual.clear();
-                        },
-                      ),
-                    ],
+                          onSubmitted: (value) {
+                            final name = value.trim();
+                            if (name.isEmpty) {
+                              return;
+                            }
+                            setLocal(() => selected.add(name));
+                            manual.clear();
+                          },
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-              actions: [
-                TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('إلغاء')),
-                FilledButton(
-                  onPressed: () {
-                    final extra = manual.text.trim();
-                    if (extra.isNotEmpty) {
-                      selected.add(extra);
-                    }
-                    ShiftRoster.save(
-                      ShiftAssignment(
-                        templateId: template.id,
-                        shiftName: template.nameAr,
-                        window: '${template.startsAt} – ${template.endsAt}',
-                        employeeNames: selected.toList(),
-                      ),
-                    );
-                    Navigator.pop(dialogContext);
-                  },
-                  child: const Text('حفظ التكليف'),
-                ),
-              ],
-            );
-          },
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(dialogContext),
+                    child: const Text('إلغاء'),
+                  ),
+                  FilledButton(
+                    onPressed: () {
+                      final extra = manual.text.trim();
+                      if (extra.isNotEmpty) {
+                        selected.add(extra);
+                      }
+                      ShiftRoster.save(
+                        ShiftAssignment(
+                          templateId: template.id,
+                          shiftName: template.nameAr,
+                          window: '${template.startsAt} – ${template.endsAt}',
+                          employeeNames: selected.toList(),
+                        ),
+                      );
+                      Navigator.pop(dialogContext);
+                    },
+                    child: const Text('حفظ التكليف'),
+                  ),
+                ],
+              );
+            },
+          ),
         );
       },
     );
-    manual.dispose();
   }
 }

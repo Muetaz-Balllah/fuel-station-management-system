@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:frontend/core/di/injection.dart';
 import 'package:frontend/core/layout/responsive_layout.dart';
+import 'package:frontend/core/widgets/dispose_controllers.dart';
 import 'package:frontend/core/theming/app_colors.dart';
 import 'package:frontend/features/assets/data/models/asset_models.dart';
 import 'package:frontend/features/assets/data/repos/assets_repository.dart';
@@ -92,12 +93,16 @@ class AssetsView extends StatelessWidget {
                   alignment: WrapAlignment.end,
                   children: [
                     OutlinedButton.icon(
-                      onPressed: board == null ? null : () => _addPump(context, board),
+                      onPressed: board == null
+                          ? null
+                          : () => _addPump(context, board),
                       icon: const Icon(Icons.add),
                       label: const Text('إضافة مضخة'),
                     ),
                     FilledButton.icon(
-                      onPressed: board == null ? null : () => _addTank(context, board),
+                      onPressed: board == null
+                          ? null
+                          : () => _addTank(context, board),
                       icon: const Icon(Icons.storage),
                       label: const Text('إضافة خزان جديد'),
                     ),
@@ -122,7 +127,11 @@ class AssetsView extends StatelessWidget {
             if (state.error != null)
               Padding(
                 padding: const EdgeInsets.only(top: 12),
-                child: Text(state.error!, key: const Key('assets-error'), style: const TextStyle(color: AppColors.error)),
+                child: Text(
+                  state.error!,
+                  key: const Key('assets-error'),
+                  style: const TextStyle(color: AppColors.error),
+                ),
               ),
             const SizedBox(height: 16),
             if (board == null)
@@ -137,13 +146,17 @@ class AssetsView extends StatelessWidget {
                 LayoutBuilder(
                   builder: (context, constraints) {
                     final columns = constraints.maxWidth >= 860 ? 2 : 1;
-                    final width = (constraints.maxWidth - (columns - 1) * 16) / columns;
+                    final width =
+                        (constraints.maxWidth - (columns - 1) * 16) / columns;
                     return Wrap(
                       spacing: 16,
                       runSpacing: 16,
                       children: [
                         for (final card in board.cards)
-                          SizedBox(width: width, child: _PumpCard(card: card)),
+                          SizedBox(
+                            width: width,
+                            child: _PumpCard(card: card),
+                          ),
                       ],
                     );
                   },
@@ -182,12 +195,20 @@ class _FreeTanksPanel extends StatelessWidget {
         children: [
           const Text(
             'خزانات غير مرتبطة بمضخة',
-            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: AppColors.primary),
+            style: TextStyle(
+              fontWeight: FontWeight.w800,
+              fontSize: 16,
+              color: AppColors.primary,
+            ),
           ),
           const SizedBox(height: 4),
           const Text(
             'بعد حذف المضخة ينتقل الخزان إلى هذه القائمة. احذف الخزان من هنا أو اربطه بمضخة جديدة عبر «إضافة مضخة».',
-            style: TextStyle(fontSize: 12, color: AppColors.onSurfaceVariant, height: 1.4),
+            style: TextStyle(
+              fontSize: 12,
+              color: AppColors.onSurfaceVariant,
+              height: 1.4,
+            ),
           ),
           const SizedBox(height: 12),
           for (final tank in tanks) _FreeTankRow(tank: tank),
@@ -218,22 +239,34 @@ class _FreeTankRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('${tank.code} • ${tank.name}', style: const TextStyle(fontWeight: FontWeight.w700)),
+                Text(
+                  '${tank.code} • ${tank.name}',
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
                 Text(
                   '${tank.productName} • ${tank.percent}% • L ${formatQty(tank.currentLiters)} / ${formatQty(tank.capacityLiters)}',
-                  style: const TextStyle(fontSize: 12, color: AppColors.onSurfaceVariant),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.onSurfaceVariant,
+                  ),
                 ),
               ],
             ),
           ),
-          TextButton(onPressed: () => _adjust(context, tank), child: const Text('تسوية')),
+          TextButton(
+            onPressed: () => _adjust(context, tank),
+            child: const Text('تسوية'),
+          ),
           TextButton(
             onPressed: () => _confirmDelete(
               context,
               'حذف الخزان ${tank.code} نهائياً؟',
               () => context.read<AssetsCubit>().deleteTank(tank.id),
             ),
-            child: const Text('حذف الخزان', style: TextStyle(color: AppColors.error)),
+            child: const Text(
+              'حذف الخزان',
+              style: TextStyle(color: AppColors.error),
+            ),
           ),
         ],
       ),
@@ -279,16 +312,28 @@ class _PumpCard extends StatelessWidget {
                   children: [
                     Text(
                       'وحدة مضخة ${card.pump.code} (${card.tank.productName})',
-                      style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.primary),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.primary,
+                      ),
                     ),
                     const SizedBox(height: 4),
                     Wrap(
                       spacing: 6,
                       runSpacing: 4,
                       children: [
-                        _Pill(card.pump.statusLabel, maintenance ? _orange : _green),
-                        _Pill('خزان مستقل مخصص: ${card.tank.code}', AppColors.primary),
-                        _Pill(card.tank.cardBandLabel, alert ? _orange : _green),
+                        _Pill(
+                          card.pump.statusLabel,
+                          maintenance ? _orange : _green,
+                        ),
+                        _Pill(
+                          'خزان مستقل مخصص: ${card.tank.code}',
+                          AppColors.primary,
+                        ),
+                        _Pill(
+                          card.tank.cardBandLabel,
+                          alert ? _orange : _green,
+                        ),
                       ],
                     ),
                   ],
@@ -299,17 +344,34 @@ class _PumpCard extends StatelessWidget {
           const SizedBox(height: 16),
           Row(
             children: [
-              _CapacityBlock(percent: card.tank.percent, code: card.tank.code, alert: alert),
+              _CapacityBlock(
+                percent: card.tank.percent,
+                code: card.tank.code,
+                alert: alert,
+              ),
               const SizedBox(width: 12),
               Expanded(
                 child: Wrap(
                   spacing: 8,
                   runSpacing: 8,
                   children: [
-                    _Stat('سعة الخزان المستقل', 'L ${formatQty(card.tank.capacityLiters)}'),
-                    _Stat('الكمية المتوفرة', 'L ${formatQty(card.tank.currentLiters)}', alert: alert),
-                    _Stat('آخر توريد للخزان', card.tank.lastReceiptLabel ?? '—'),
-                    _Stat('معدل السحب اليومي', 'L ${formatQty(card.tank.todayLiters)}'),
+                    _Stat(
+                      'سعة الخزان المستقل',
+                      'L ${formatQty(card.tank.capacityLiters)}',
+                    ),
+                    _Stat(
+                      'الكمية المتوفرة',
+                      'L ${formatQty(card.tank.currentLiters)}',
+                      alert: alert,
+                    ),
+                    _Stat(
+                      'آخر توريد للخزان',
+                      card.tank.lastReceiptLabel ?? '—',
+                    ),
+                    _Stat(
+                      'معدل السحب اليومي',
+                      'L ${formatQty(card.tank.todayLiters)}',
+                    ),
                   ],
                 ),
               ),
@@ -319,13 +381,23 @@ class _PumpCard extends StatelessWidget {
           Row(
             children: [
               const Expanded(
-                child: Text('مسدسات التعبئة بالمضخة', style: TextStyle(fontWeight: FontWeight.w700)),
+                child: Text(
+                  'مسدسات التعبئة بالمضخة',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
               ),
-              Text(card.pump.code, style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.primary)),
+              Text(
+                card.pump.code,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.primary,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 8),
-          for (final nozzle in card.nozzles) _NozzleRow(nozzle: nozzle, pumpId: card.pump.id),
+          for (final nozzle in card.nozzles)
+            _NozzleRow(nozzle: nozzle, pumpId: card.pump.id),
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,
@@ -337,9 +409,9 @@ class _PumpCard extends StatelessWidget {
               ),
               TextButton(
                 onPressed: () => context.read<AssetsCubit>().setPumpStatus(
-                      pumpId: card.pump.id,
-                      status: maintenance ? 'active' : 'maintenance',
-                    ),
+                  pumpId: card.pump.id,
+                  status: maintenance ? 'active' : 'maintenance',
+                ),
                 child: Text(maintenance ? 'إعادة التشغيل' : 'وضع الصيانة'),
               ),
               TextButton(
@@ -349,7 +421,10 @@ class _PumpCard extends StatelessWidget {
                   'سيظهر الخزان ${card.tank.code} في قائمة «خزانات غير مرتبطة» بالأسفل ويمكن حذفه من هناك.',
                   () => context.read<AssetsCubit>().deletePump(card.pump.id),
                 ),
-                child: const Text('حذف المضخة', style: TextStyle(color: AppColors.error)),
+                child: const Text(
+                  'حذف المضخة',
+                  style: TextStyle(color: AppColors.error),
+                ),
               ),
               TextButton(
                 onPressed: () => _adjust(context, card.tank),
@@ -364,7 +439,11 @@ class _PumpCard extends StatelessWidget {
 }
 
 class _CapacityBlock extends StatelessWidget {
-  const _CapacityBlock({required this.percent, required this.code, required this.alert});
+  const _CapacityBlock({
+    required this.percent,
+    required this.code,
+    required this.alert,
+  });
 
   final int percent;
   final String code;
@@ -400,9 +479,21 @@ class _CapacityBlock extends StatelessWidget {
               children: [
                 Text(
                   '$percent%',
-                  style: TextStyle(color: fill > 0.55 ? Colors.white : AppColors.primary, fontWeight: FontWeight.w800, fontSize: 20),
+                  style: TextStyle(
+                    color: fill > 0.55 ? Colors.white : AppColors.primary,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 20,
+                  ),
                 ),
-                Text(code, style: TextStyle(fontSize: 10, color: fill > 0.55 ? const Color(0xFFE7EEFF) : AppColors.onSurfaceVariant)),
+                Text(
+                  code,
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: fill > 0.55
+                        ? const Color(0xFFE7EEFF)
+                        : AppColors.onSurfaceVariant,
+                  ),
+                ),
               ],
             ),
           ),
@@ -437,8 +528,14 @@ class _NozzleRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('${nozzle.code} (${nozzle.label})', style: TextStyle(color: color, fontWeight: FontWeight.w700)),
-                Text('${nozzle.statusLabel} • عداد ${formatQty(nozzle.currentMeter)} L', style: const TextStyle(fontSize: 12)),
+                Text(
+                  '${nozzle.code} (${nozzle.label})',
+                  style: TextStyle(color: color, fontWeight: FontWeight.w700),
+                ),
+                Text(
+                  '${nozzle.statusLabel} • عداد ${formatQty(nozzle.currentMeter)} L',
+                  style: const TextStyle(fontSize: 12),
+                ),
               ],
             ),
           ),
@@ -450,7 +547,11 @@ class _NozzleRow extends StatelessWidget {
             child: Text(ready ? 'تعطيل مؤقت' : 'تفعيل'),
           ),
           TextButton(
-            onPressed: () => _confirmDelete(context, 'حذف المسدس ${nozzle.code}؟', () => cubit.deleteNozzle(nozzle.id)),
+            onPressed: () => _confirmDelete(
+              context,
+              'حذف المسدس ${nozzle.code}؟',
+              () => cubit.deleteNozzle(nozzle.id),
+            ),
             child: const Text('حذف', style: TextStyle(color: AppColors.error)),
           ),
         ],
@@ -459,15 +560,25 @@ class _NozzleRow extends StatelessWidget {
   }
 }
 
-Future<void> _confirmDelete(BuildContext context, String message, Future<bool> Function() action) async {
+Future<void> _confirmDelete(
+  BuildContext context,
+  String message,
+  Future<bool> Function() action,
+) async {
   final ok = await showDialog<bool>(
     context: context,
     builder: (dialogContext) => AlertDialog(
       title: const Text('تأكيد'),
       content: Text(message),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('إلغاء')),
-        FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('نعم')),
+        TextButton(
+          onPressed: () => Navigator.pop(dialogContext, false),
+          child: const Text('إلغاء'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(dialogContext, true),
+          child: const Text('نعم'),
+        ),
       ],
     ),
   );
@@ -480,7 +591,9 @@ Future<void> _confirmDelete(BuildContext context, String message, Future<bool> F
     return;
   }
   if (!success && cubit.state.error != null) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(cubit.state.error!)));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(cubit.state.error!)));
   }
 }
 
@@ -498,8 +611,20 @@ class _Stat extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: const TextStyle(fontSize: 11, color: AppColors.onSurfaceVariant)),
-          Text(value, style: TextStyle(fontWeight: FontWeight.w700, color: alert ? _orange : AppColors.onSurface)),
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 11,
+              color: AppColors.onSurfaceVariant,
+            ),
+          ),
+          Text(
+            value,
+            style: TextStyle(
+              fontWeight: FontWeight.w700,
+              color: alert ? _orange : AppColors.onSurface,
+            ),
+          ),
         ],
       ),
     );
@@ -516,8 +641,18 @@ class _Pill extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)),
-      child: Text(text, style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w700)),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: color,
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
     );
   }
 }
@@ -538,14 +673,23 @@ class _EventLog extends StatelessWidget {
         Row(
           children: [
             const Expanded(
-              child: Text('سجل القراءات التفصيلي', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+              child: Text(
+                'سجل القراءات التفصيلي',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+              ),
             ),
             DropdownButton<String>(
               value: state.productFilter,
               items: [
-                const DropdownMenuItem(value: '', child: Text('جميع أنواع الوقود')),
+                const DropdownMenuItem(
+                  value: '',
+                  child: Text('جميع أنواع الوقود'),
+                ),
                 for (final product in products)
-                  DropdownMenuItem(value: product.id, child: Text(product.nameAr)),
+                  DropdownMenuItem(
+                    value: product.id,
+                    child: Text(product.nameAr),
+                  ),
               ],
               onChanged: (value) {
                 if (value != null) {
@@ -566,29 +710,72 @@ class _EventLog extends StatelessWidget {
             children: [
               Container(
                 color: AppColors.primary,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
                 child: const Row(
                   children: [
-                    Expanded(child: Text('التوقيت', style: TextStyle(color: Colors.white))),
-                    Expanded(flex: 2, child: Text('المسار', style: TextStyle(color: Colors.white))),
-                    Expanded(child: Text('نوع الحدث', style: TextStyle(color: Colors.white))),
-                    Expanded(child: Text('الكمية', style: TextStyle(color: Colors.white))),
-                    Expanded(child: Text('المسؤول', style: TextStyle(color: Colors.white))),
+                    Expanded(
+                      child: Text(
+                        'التوقيت',
+                        style: TextStyle(color: Colors.white),
+                      ),
+                    ),
+                    Expanded(
+                      flex: 2,
+                      child: Text(
+                        'المسار',
+                        style: TextStyle(color: Colors.white),
+                      ),
+                    ),
+                    Expanded(
+                      child: Text(
+                        'نوع الحدث',
+                        style: TextStyle(color: Colors.white),
+                      ),
+                    ),
+                    Expanded(
+                      child: Text(
+                        'الكمية',
+                        style: TextStyle(color: Colors.white),
+                      ),
+                    ),
+                    Expanded(
+                      child: Text(
+                        'المسؤول',
+                        style: TextStyle(color: Colors.white),
+                      ),
+                    ),
                   ],
                 ),
               ),
               if (state.events.isEmpty)
-                const Padding(padding: EdgeInsets.all(16), child: Text('لا توجد حركات بعد.'))
+                const Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Text('لا توجد حركات بعد.'),
+                )
               else
                 for (final event in state.events)
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
                     child: Row(
                       children: [
-                        Expanded(child: Text(event.createdAt, maxLines: 2, overflow: TextOverflow.ellipsis)),
+                        Expanded(
+                          child: Text(
+                            event.createdAt,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
                         Expanded(flex: 2, child: Text(event.path)),
                         Expanded(child: Text(event.movementLabel)),
-                        Expanded(child: Text('${formatQty(event.litersDelta)} L')),
+                        Expanded(
+                          child: Text('${formatQty(event.litersDelta)} L'),
+                        ),
                         Expanded(child: Text(event.actorName)),
                       ],
                     ),
@@ -604,13 +791,18 @@ class _EventLog extends StatelessWidget {
             TextButton(
               onPressed: state.eventOffset == 0
                   ? null
-                  : () => context.read<AssetsCubit>().changePage(state.eventOffset - AssetsState.pageSize),
+                  : () => context.read<AssetsCubit>().changePage(
+                      state.eventOffset - AssetsState.pageSize,
+                    ),
               child: const Text('السابق'),
             ),
             TextButton(
-              onPressed: state.eventOffset + AssetsState.pageSize >= state.eventTotal
+              onPressed:
+                  state.eventOffset + AssetsState.pageSize >= state.eventTotal
                   ? null
-                  : () => context.read<AssetsCubit>().changePage(state.eventOffset + AssetsState.pageSize),
+                  : () => context.read<AssetsCubit>().changePage(
+                      state.eventOffset + AssetsState.pageSize,
+                    ),
               child: const Text('التالي'),
             ),
           ],
@@ -632,11 +824,17 @@ Future<void> _addTank(BuildContext context, AssetBoard board) async {
           child: TankForm(
             products: board.products,
             onSubmit: (name, productId, capacity) async {
-              final ok = await cubit.createTank(name: name, productId: productId, capacity: capacity);
+              final ok = await cubit.createTank(
+                name: name,
+                productId: productId,
+                capacity: capacity,
+              );
               if (ok && dialogContext.mounted) {
                 Navigator.pop(dialogContext);
               } else if (dialogContext.mounted && cubit.state.error != null) {
-                ScaffoldMessenger.of(dialogContext).showSnackBar(SnackBar(content: Text(cubit.state.error!)));
+                ScaffoldMessenger.of(
+                  dialogContext,
+                ).showSnackBar(SnackBar(content: Text(cubit.state.error!)));
               }
             },
           ),
@@ -653,61 +851,83 @@ Future<void> _addPump(BuildContext context, AssetBoard board) async {
   await showDialog<void>(
     context: context,
     builder: (dialogContext) {
-      return StatefulBuilder(
-        builder: (context, setLocal) {
-          return AlertDialog(
-            title: const Text('إضافة مضخة'),
-            content: SizedBox(
-              width: 420,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(controller: code, decoration: const InputDecoration(labelText: 'رمز المضخة')),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    value: tankId,
-                    decoration: const InputDecoration(labelText: 'الخزان المستقل'),
-                    items: [
-                      for (final tank in board.freeTanks)
-                        DropdownMenuItem(value: tank.id, child: Text('${tank.code} • ${tank.name}')),
-                    ],
-                    onChanged: board.freeTanks.isEmpty ? null : (value) => setLocal(() => tankId = value),
-                  ),
-                  if (board.freeTanks.isEmpty)
-                    const Padding(
-                      padding: EdgeInsets.only(top: 8),
-                      child: Text('كل الخزانات مرتبطة بمضخة. أضف خزاناً جديداً أولاً.'),
+      return DisposeControllers(
+        controllers: [code],
+        child: StatefulBuilder(
+          builder: (context, setLocal) {
+            return AlertDialog(
+              title: const Text('إضافة مضخة'),
+              content: SizedBox(
+                width: 420,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: code,
+                      decoration: const InputDecoration(
+                        labelText: 'رمز المضخة',
+                      ),
                     ),
-                ],
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      value: tankId,
+                      decoration: const InputDecoration(
+                        labelText: 'الخزان المستقل',
+                      ),
+                      items: [
+                        for (final tank in board.freeTanks)
+                          DropdownMenuItem(
+                            value: tank.id,
+                            child: Text('${tank.code} • ${tank.name}'),
+                          ),
+                      ],
+                      onChanged: board.freeTanks.isEmpty
+                          ? null
+                          : (value) => setLocal(() => tankId = value),
+                    ),
+                    if (board.freeTanks.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.only(top: 8),
+                        child: Text(
+                          'كل الخزانات مرتبطة بمضخة. أضف خزاناً جديداً أولاً.',
+                        ),
+                      ),
+                  ],
+                ),
               ),
-            ),
-            actions: [
-              TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('إلغاء')),
-              FilledButton(
-                onPressed: tankId == null
-                    ? null
-                    : () async {
-                        final ok = await cubit.createPump(code: code.text, tankId: tankId!);
-                        if (!dialogContext.mounted) {
-                          return;
-                        }
-                        if (ok) {
-                          Navigator.pop(dialogContext);
-                        } else if (cubit.state.error != null) {
-                          ScaffoldMessenger.of(dialogContext).showSnackBar(
-                            SnackBar(content: Text(cubit.state.error!)),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('إلغاء'),
+                ),
+                FilledButton(
+                  onPressed: tankId == null
+                      ? null
+                      : () async {
+                          final ok = await cubit.createPump(
+                            code: code.text,
+                            tankId: tankId!,
                           );
-                        }
-                      },
-                child: const Text('حفظ'),
-              ),
-            ],
-          );
-        },
+                          if (!dialogContext.mounted) {
+                            return;
+                          }
+                          if (ok) {
+                            Navigator.pop(dialogContext);
+                          } else if (cubit.state.error != null) {
+                            ScaffoldMessenger.of(dialogContext).showSnackBar(
+                              SnackBar(content: Text(cubit.state.error!)),
+                            );
+                          }
+                        },
+                  child: const Text('حفظ'),
+                ),
+              ],
+            );
+          },
+        ),
       );
     },
   );
-  code.dispose();
 }
 
 Future<void> _addNozzle(BuildContext context, PumpCardData card) async {
@@ -719,67 +939,98 @@ Future<void> _addNozzle(BuildContext context, PumpCardData card) async {
   await showDialog<void>(
     context: context,
     builder: (dialogContext) {
-      return StatefulBuilder(
-        builder: (context, setLocal) {
-          return AlertDialog(
-            title: const Text('إضافة مسدس تعبئة جديد'),
-            content: SizedBox(
-              width: 420,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(child: Text('المضخة\n${card.pump.code}', style: const TextStyle(fontWeight: FontWeight.w700))),
-                      Expanded(child: Text('الخزان\n${card.tank.code} • ${card.tank.productName}')),
-                    ],
-                  ),
-                  TextField(controller: code, decoration: const InputDecoration(labelText: 'رمز المسدس')),
-                  TextField(controller: label, decoration: const InputDecoration(labelText: 'الجهة')),
-                  TextField(controller: meter, decoration: const InputDecoration(labelText: 'العداد الابتدائي')),
-                  DropdownButton<String>(
-                    value: status,
-                    isExpanded: true,
-                    items: const [
-                      DropdownMenuItem(value: 'ready', child: Text('جاهز')),
-                      DropdownMenuItem(value: 'valve_check', child: Text('فحص الصمام')),
-                      DropdownMenuItem(value: 'calibrating', child: Text('معايرة عداد')),
-                    ],
-                    onChanged: (value) {
-                      if (value != null) {
-                        setLocal(() => status = value);
-                      }
-                    },
-                  ),
-                ],
+      return DisposeControllers(
+        controllers: [code, label, meter],
+        child: StatefulBuilder(
+          builder: (context, setLocal) {
+            return AlertDialog(
+              title: const Text('إضافة مسدس تعبئة جديد'),
+              content: SizedBox(
+                width: 420,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'المضخة\n${card.pump.code}',
+                            style: const TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                        Expanded(
+                          child: Text(
+                            'الخزان\n${card.tank.code} • ${card.tank.productName}',
+                          ),
+                        ),
+                      ],
+                    ),
+                    TextField(
+                      controller: code,
+                      decoration: const InputDecoration(
+                        labelText: 'رمز المسدس',
+                      ),
+                    ),
+                    TextField(
+                      controller: label,
+                      decoration: const InputDecoration(labelText: 'الجهة'),
+                    ),
+                    TextField(
+                      controller: meter,
+                      decoration: const InputDecoration(
+                        labelText: 'العداد الابتدائي',
+                      ),
+                    ),
+                    DropdownButton<String>(
+                      value: status,
+                      isExpanded: true,
+                      items: const [
+                        DropdownMenuItem(value: 'ready', child: Text('جاهز')),
+                        DropdownMenuItem(
+                          value: 'valve_check',
+                          child: Text('فحص الصمام'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'calibrating',
+                          child: Text('معايرة عداد'),
+                        ),
+                      ],
+                      onChanged: (value) {
+                        if (value != null) {
+                          setLocal(() => status = value);
+                        }
+                      },
+                    ),
+                  ],
+                ),
               ),
-            ),
-            actions: [
-              TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('إلغاء')),
-              FilledButton(
-                onPressed: () async {
-                  final ok = await cubit.createNozzle(
-                    pumpId: card.pump.id,
-                    code: code.text,
-                    label: label.text,
-                    meter: meter.text,
-                    status: status,
-                  );
-                  if (ok && dialogContext.mounted) {
-                    Navigator.pop(dialogContext);
-                  }
-                },
-                child: const Text('حفظ'),
-              ),
-            ],
-          );
-        },
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('إلغاء'),
+                ),
+                FilledButton(
+                  onPressed: () async {
+                    final ok = await cubit.createNozzle(
+                      pumpId: card.pump.id,
+                      code: code.text,
+                      label: label.text,
+                      meter: meter.text,
+                      status: status,
+                    );
+                    if (ok && dialogContext.mounted) {
+                      Navigator.pop(dialogContext);
+                    }
+                  },
+                  child: const Text('حفظ'),
+                ),
+              ],
+            );
+          },
+        ),
       );
     },
   );
-  code.dispose();
-  label.dispose();
-  meter.dispose();
 }
 
 Future<void> _adjust(BuildContext context, AssetTank tank) async {
@@ -789,35 +1040,51 @@ Future<void> _adjust(BuildContext context, AssetTank tank) async {
   await showDialog<void>(
     context: context,
     builder: (dialogContext) {
-      return AlertDialog(
-        title: Text('تسوية ${tank.code}'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(controller: delta, decoration: const InputDecoration(labelText: 'الكمية (+ أو -)')),
-            TextField(controller: note, decoration: const InputDecoration(labelText: 'السبب')),
+      return DisposeControllers(
+        controllers: [delta, note],
+        child: AlertDialog(
+          title: Text('تسوية ${tank.code}'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: delta,
+                decoration: const InputDecoration(labelText: 'الكمية (+ أو -)'),
+              ),
+              TextField(
+                controller: note,
+                decoration: const InputDecoration(labelText: 'السبب'),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('إلغاء'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                final ok = await cubit.adjust(
+                  tankId: tank.id,
+                  delta: delta.text,
+                  note: note.text,
+                );
+                if (!dialogContext.mounted) {
+                  return;
+                }
+                if (ok) {
+                  Navigator.pop(dialogContext);
+                } else if (cubit.state.error != null) {
+                  ScaffoldMessenger.of(
+                    dialogContext,
+                  ).showSnackBar(SnackBar(content: Text(cubit.state.error!)));
+                }
+              },
+              child: const Text('تسجيل'),
+            ),
           ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('إلغاء')),
-          FilledButton(
-            onPressed: () async {
-              final ok = await cubit.adjust(tankId: tank.id, delta: delta.text, note: note.text);
-              if (!dialogContext.mounted) {
-                return;
-              }
-              if (ok) {
-                Navigator.pop(dialogContext);
-              } else if (cubit.state.error != null) {
-                ScaffoldMessenger.of(dialogContext).showSnackBar(SnackBar(content: Text(cubit.state.error!)));
-              }
-            },
-            child: const Text('تسجيل'),
-          ),
-        ],
       );
     },
   );
-  delta.dispose();
-  note.dispose();
 }

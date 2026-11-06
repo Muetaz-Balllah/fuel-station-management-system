@@ -1,16 +1,15 @@
-"""Lightweight SQLite column patches for local dev DBs (create_all does not ALTER)."""
+"""Add columns that create_all will not alter onto an existing SQLite file."""
 
 from sqlalchemy import inspect, text
 from sqlalchemy.engine import Engine
 
 
 def apply_sqlite_patches(engine: Engine) -> None:
-    url = str(engine.url)
-    if not url.startswith("sqlite"):
+    if not str(engine.url).startswith("sqlite"):
         return
     inspector = inspect(engine)
     tables = set(inspector.get_table_names())
-    patches: list[tuple[str, str, str]] = [
+    patches = [
         ("suppliers", "logo_url", "ALTER TABLE suppliers ADD COLUMN logo_url VARCHAR(300)"),
         ("users", "photo_url", "ALTER TABLE users ADD COLUMN photo_url VARCHAR(300)"),
         ("shift_duties", "rostered_user_id", "ALTER TABLE shift_duties ADD COLUMN rostered_user_id VARCHAR(36)"),

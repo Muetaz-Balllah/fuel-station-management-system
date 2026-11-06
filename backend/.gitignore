@@ -5,4 +5,7 @@ __pycache__/
 .env
 *.pyc
 fuel_station.db
+fuel_station.legacy.db
+fuel_station.fresh.db
 uploads/
+reports/

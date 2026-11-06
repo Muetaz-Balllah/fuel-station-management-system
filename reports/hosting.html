@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <title>استضافة نظام إدارة محطة الوقود</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; background: #000; }
+    body {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      font-family: "Segoe UI", Tahoma, sans-serif;
+      color: #ededed;
+      padding: 28px 32px 24px;
+    }
+    header { margin-bottom: 18px; }
+    h1 { margin: 0; font-size: 32px; font-weight: 650; }
+    .lead { margin: 8px 0 0; color: #9a9a9a; font-size: 18px; }
+    .flow {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 0 0 18px;
+      font-size: 18px;
+      color: #bdbdbd;
+    }
+    .flow b {
+      color: #fff;
+      font-weight: 650;
+      border: 1px solid #2e2e2e;
+      background: #111;
+      border-radius: 8px;
+      padding: 8px 14px;
+    }
+    .grid {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 18px;
+      min-height: 0;
+    }
+    article {
+      display: flex;
+      flex-direction: column;
+      background: #0a0a0a;
+      border: 1px solid #2a2a2a;
+      border-radius: 14px;
+      overflow: hidden;
+    }
+    .top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 18px 18px 12px;
+    }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .logo {
+      width: 42px;
+      height: 42px;
+      display: grid;
+      place-items: center;
+      border-radius: 10px;
+      background: #161616;
+      border: 1px solid #2e2e2e;
+      flex: none;
+    }
+    .logo svg { width: 26px; height: 26px; display: block; }
+    h2 { margin: 0; font-size: 22px; font-weight: 650; line-height: 1.2; }
+    h2 small { display: block; margin-top: 2px; color: #8d8d8d; font-size: 14px; font-weight: 500; }
+    .ready { color: #4ade80; font-size: 16px; font-weight: 650; white-space: nowrap; }
+    .ready::before {
+      content: "";
+      display: inline-block;
+      width: 9px;
+      height: 9px;
+      margin-left: 8px;
+      border-radius: 50%;
+      background: #4ade80;
+      vertical-align: middle;
+    }
+    .specs {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      margin: 4px 14px 8px;
+      border: 1px solid #2a2a2a;
+      border-radius: 10px;
+      background: #000;
+    }
+    .specs div { padding: 14px 8px; text-align: center; border-left: 1px solid #2a2a2a; }
+    .specs div:last-child { border-left: 0; }
+    .specs strong {
+      display: block;
+      font-size: 20px;
+      font-weight: 700;
+      color: #fff;
+      direction: ltr;
+    }
+    .specs span { display: block; margin-top: 4px; font-size: 13px; color: #9a9a9a; }
+    table { width: 100%; height: 100%; border-collapse: collapse; font-size: 16px; }
+    th, td {
+      padding: 0 18px;
+      text-align: right;
+      border-top: 1px solid #222;
+      vertical-align: middle;
+    }
+    th { width: 108px; color: #9a9a9a; font-weight: 550; }
+    td { color: #f5f5f5; line-height: 1.45; }
+    .ltr { direction: ltr; unicode-bidi: isolate; text-align: right; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>استضافة نظام إدارة محطة الوقود</h1>
+    <p class="lead">الواجهة وقاعدة البيانات والخادم، كل واحدة على خطتها المجانية.</p>
+  </header>
+  <div class="flow">
+    <b>المتصفح</b> ← <b>الواجهة</b> ← <b>الخادم</b> ← <b>قاعدة البيانات</b>
+  </div>
+  <div class="grid">
+    <article>
+      <div class="top">
+        <div class="brand">
+          <div class="logo" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path fill="#fff" d="M12 1.5 23 21.5H1L12 1.5z"/></svg>
+          </div>
+          <h2>الواجهة<small>Vercel</small></h2>
+        </div>
+        <span class="ready">جاهز</span>
+      </div>
+      <div class="specs">
+        <div><strong>0$</strong><span>شهريًا</span></div>
+        <div><strong>100 GB</strong><span>نقل البيانات</span></div>
+        <div><strong>2 vCPU</strong><span>المعالج عند البناء</span></div>
+        <div><strong>8 GB</strong><span>الذاكرة عند البناء</span></div>
+      </div>
+      <table>
+        <tr><th>النطاق</th><td class="ltr">fuel-station-management-system-fron-psi.vercel.app</td></tr>
+        <tr><th>الفرع</th><td>الفرع الرئيسي <bdi dir="ltr">main</bdi></td></tr>
+        <tr><th>النشر</th><td>مئة عملية في اليوم، ومساحة القرص <bdi dir="ltr">32 GB</bdi></td></tr>
+        <tr><th>الخطة</th><td>الخطة المجانية <bdi dir="ltr">Hobby</bdi>، للاستخدام الشخصي</td></tr>
+      </table>
+    </article>
+    <article>
+      <div class="top">
+        <div class="brand">
+          <div class="logo" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path fill="#00e599" d="M3 4h7.2L19 20H11.8L3 4zm11.2 0H21l-4.2 7.2h-6.2L14.2 4z"/></svg>
+          </div>
+          <h2>قاعدة البيانات<small>Neon</small></h2>
+        </div>
+        <span class="ready">تعمل</span>
+      </div>
+      <div class="specs">
+        <div><strong>0$</strong><span>شهريًا</span></div>
+        <div><strong>0.25–2</strong><span>وحدات المعالجة</span></div>
+        <div><strong>18</strong><span>إصدار قاعدة البيانات</span></div>
+        <div><strong>33.43 MB</strong><span>التخزين المستخدم</span></div>
+      </div>
+      <table>
+        <tr><th>المشروع</th><td><bdi dir="ltr">Mahatati</bdi></td></tr>
+        <tr><th>المنطقة</th><td>فرانكفورت، أوروبا الوسطى</td></tr>
+        <tr><th>الفرع</th><td>فرع الإنتاج <bdi dir="ltr">production</bdi></td></tr>
+        <tr><th>السجل</th><td>يُحفظ سجل التغييرات لمدة 6 ساعات</td></tr>
+      </table>
+    </article>
+    <article>
+      <div class="top">
+        <div class="brand">
+          <div class="logo" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path fill="#fff" d="M12 2 21 7v10l-9 5-9-5V7l9-5zm0 2.3L5.2 8 12 11.7 18.8 8 12 4.3zM4.8 9.2V16l6.2 3.4v-6.8L4.8 9.2zm14.4 0-6.2 3.4v6.8l6.2-3.4V9.2z"/></svg>
+          </div>
+          <h2>الخادم<small>Render</small></h2>
+        </div>
+        <span class="ready">يعمل</span>
+      </div>
+      <div class="specs">
+        <div><strong>0$</strong><span>شهريًا</span></div>
+        <div><strong>0.1</strong><span>المعالج</span></div>
+        <div><strong>512 MB</strong><span>الذاكرة</span></div>
+        <div><strong>Free</strong><span>اسم الخطة</span></div>
+      </div>
+      <table>
+        <tr><th>العنوان</th><td class="ltr">fuel-station-management-system-87yz.onrender.com</td></tr>
+        <tr><th>الفحص</th><td>قاعدة البيانات والجلسات وتخزين الملفات تعمل</td></tr>
+        <tr><th>الذاكرة</th><td><bdi dir="ltr">512 MB</bdi> من ذاكرة الوصول العشوائي</td></tr>
+        <tr><th>المعالج</th><td><bdi dir="ltr">0.1</bdi> من وحدة المعالجة</td></tr>
+      </table>
+    </article>
+  </div>
+</body>
+</html>

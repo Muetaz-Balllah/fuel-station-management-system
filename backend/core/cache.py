@@ -24,7 +24,10 @@ class SessionCache:
 
                 self._client = fakeredis.FakeRedis(decode_responses=True)
             else:
-                self._client = redis.Redis.from_url(settings.redis_url, decode_responses=True)
+                # Local Redis 3.0 does not understand HELLO. RESP2 works there and on Redis 6+.
+                self._client = redis.Redis.from_url(
+                    settings.redis_url, decode_responses=True, protocol=2
+                )
         return self._client
 
     def ping(self) -> bool:

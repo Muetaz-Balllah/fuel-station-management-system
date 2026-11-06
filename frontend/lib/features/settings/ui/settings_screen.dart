@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:frontend/core/di/injection.dart';
 import 'package:frontend/core/layout/responsive_layout.dart';
+import 'package:frontend/core/widgets/dispose_controllers.dart';
 import 'package:frontend/core/widgets/stored_image.dart';
 import 'package:frontend/core/theming/app_colors.dart';
 import 'package:frontend/features/auth/data/repos/auth_repository.dart';
@@ -99,7 +100,10 @@ class _StationTab extends StatelessWidget {
       children: [
         _StationForm(station: station),
         const SizedBox(height: 28),
-        const Text('أسعار الوقود', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+        const Text(
+          'أسعار الوقود',
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+        ),
         const SizedBox(height: 4),
         const Text(
           'تسجيل سعر جديد يبقي السعر السابق محفوظاً.',
@@ -173,14 +177,20 @@ class _StationFormState extends State<_StationForm> {
   }
 
   Future<void> _pickLogo() async {
-    final result = await FilePicker.platform.pickFiles(type: FileType.image, withData: true);
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+      withData: true,
+    );
     final file = result?.files.single;
     final bytes = file?.bytes;
     if (bytes == null || !mounted) {
       return;
     }
     setState(() => _logoBytes = bytes);
-    final ok = await context.read<SettingsCubit>().uploadLogo(bytes: bytes, filename: file!.name);
+    final ok = await context.read<SettingsCubit>().uploadLogo(
+      bytes: bytes,
+      filename: file!.name,
+    );
     if (!mounted) {
       return;
     }
@@ -210,7 +220,11 @@ class _StationFormState extends State<_StationForm> {
                 url: logo,
                 bytes: _logoBytes,
                 fit: BoxFit.contain,
-                placeholder: const Icon(Icons.local_gas_station, color: AppColors.primary, size: 40),
+                placeholder: const Icon(
+                  Icons.local_gas_station,
+                  color: AppColors.primary,
+                  size: 40,
+                ),
               ),
             ),
             const SizedBox(width: 16),
@@ -223,13 +237,22 @@ class _StationFormState extends State<_StationForm> {
         ),
         const SizedBox(height: 16),
         LicenseRenewalBanner(expiresOn: widget.station.licenseExpiresOn),
-        TextField(controller: _name, decoration: const InputDecoration(labelText: 'اسم المحطة')),
+        TextField(
+          controller: _name,
+          decoration: const InputDecoration(labelText: 'اسم المحطة'),
+        ),
         const SizedBox(height: 12),
-        TextField(controller: _license, decoration: const InputDecoration(labelText: 'رقم الترخيص')),
+        TextField(
+          controller: _license,
+          decoration: const InputDecoration(labelText: 'رقم الترخيص'),
+        ),
         const SizedBox(height: 12),
         TextField(
           controller: _expires,
-          decoration: const InputDecoration(labelText: 'تاريخ انتهاء الترخيص', hintText: '2027-12-31'),
+          decoration: const InputDecoration(
+            labelText: 'تاريخ انتهاء الترخيص',
+            hintText: '2027-12-31',
+          ),
         ),
         const SizedBox(height: 12),
         Row(
@@ -254,12 +277,12 @@ class _StationFormState extends State<_StationForm> {
           children: [
             FilledButton(
               onPressed: () => context.read<SettingsCubit>().saveStation(
-                    name: _name.text,
-                    licenseNumber: _license.text,
-                    licenseExpiresOn: _expires.text,
-                    latitude: _latitude.text,
-                    longitude: _longitude.text,
-                  ),
+                name: _name.text,
+                licenseNumber: _license.text,
+                licenseExpiresOn: _expires.text,
+                latitude: _latitude.text,
+                longitude: _longitude.text,
+              ),
               child: const Text('حفظ'),
             ),
             const SizedBox(width: 12),
@@ -325,7 +348,10 @@ class _PriceRowState extends State<_PriceRow> {
                 if (value.isEmpty) {
                   return;
                 }
-                context.read<SettingsCubit>().addPrice(widget.product.id, value);
+                context.read<SettingsCubit>().addPrice(
+                  widget.product.id,
+                  value,
+                );
                 _price.clear();
               },
               icon: const Icon(Icons.add_circle_outline),
@@ -376,15 +402,23 @@ class _UsersTabState extends State<_UsersTab> {
                   labelText: 'بحث',
                   hintText: 'الاسم أو اسم المستخدم',
                 ),
-                onSubmitted: (value) => context.read<SettingsCubit>().applyUserFilter(search: value),
+                onSubmitted: (value) => context
+                    .read<SettingsCubit>()
+                    .applyUserFilter(search: value),
               );
               final roleFilter = DropdownButton<String>(
                 value: widget.state.roleFilter,
                 isExpanded: constraints.maxWidth < 720,
                 items: const [
                   DropdownMenuItem(value: 'all', child: Text('الجميع')),
-                  DropdownMenuItem(value: 'station_manager', child: Text('مدير المحطة')),
-                  DropdownMenuItem(value: 'operator', child: Text('مشغل الوردية')),
+                  DropdownMenuItem(
+                    value: 'station_manager',
+                    child: Text('مدير المحطة'),
+                  ),
+                  DropdownMenuItem(
+                    value: 'operator',
+                    child: Text('مشغل الوردية'),
+                  ),
                 ],
                 onChanged: (value) {
                   if (value != null) {
@@ -441,12 +475,18 @@ class _UsersTabState extends State<_UsersTab> {
                               url: user.photoUrl,
                               placeholder: const ColoredBox(
                                 color: AppColors.primary,
-                                child: Icon(Icons.person, color: Colors.white, size: 20),
+                                child: Icon(
+                                  Icons.person,
+                                  color: Colors.white,
+                                  size: 20,
+                                ),
                               ),
                             ),
                           ),
                         ),
-                        title: Text('${user.fullName}  •  ${user.employeeCode}'),
+                        title: Text(
+                          '${user.fullName}  •  ${user.employeeCode}',
+                        ),
                         subtitle: Text(
                           '${user.roleNameAr}${user.isMaintenance ? ' • فني صيانة' : ''} • ${user.email ?? 'بدون بريد'}',
                         ),
@@ -462,7 +502,8 @@ class _UsersTabState extends State<_UsersTab> {
                               child: const Text('تعديل'),
                             ),
                             TextButton(
-                              onPressed: () => context.read<SettingsCubit>().updateUser(
+                              onPressed: () =>
+                                  context.read<SettingsCubit>().updateUser(
                                     user.id,
                                     {'is_active': !user.isActive},
                                   ),
@@ -491,10 +532,10 @@ class _UsersTabState extends State<_UsersTab> {
       return;
     }
     final ok = await context.read<SettingsCubit>().uploadUserPhoto(
-          userId: user.id,
-          bytes: bytes,
-          filename: file.name,
-        );
+      userId: user.id,
+      bytes: bytes,
+      filename: file.name,
+    );
     if (!ok || !context.mounted) {
       return;
     }
@@ -514,88 +555,119 @@ class _UsersTabState extends State<_UsersTab> {
     final email = TextEditingController(text: user?.email ?? '');
     final job = TextEditingController(text: user?.jobTitle ?? '');
     final password = TextEditingController();
-    var role = user?.roleCode == 'station_manager' ? 'station_manager' : 'operator';
+    var role = user?.roleCode == 'station_manager'
+        ? 'station_manager'
+        : 'operator';
     await showDialog<bool>(
       context: context,
       builder: (dialogContext) {
-        return StatefulBuilder(
-          builder: (context, setLocal) {
-            return AlertDialog(
-              title: Text(user == null ? 'إضافة مستخدم جديد' : 'تعديل المستخدم'),
-              content: SizedBox(
-                width: 420,
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      TextField(controller: name, decoration: const InputDecoration(labelText: 'الاسم')),
-                      const SizedBox(height: 12),
-                      TextField(controller: username, decoration: const InputDecoration(labelText: 'اسم المستخدم')),
-                      const SizedBox(height: 12),
-                      TextField(controller: email, decoration: const InputDecoration(labelText: 'البريد')),
-                      const SizedBox(height: 12),
-                      TextField(controller: job, decoration: const InputDecoration(labelText: 'المسمى الوظيفي')),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: password,
-                        obscureText: true,
-                        decoration: InputDecoration(
-                          labelText: user == null ? 'كلمة المرور' : 'كلمة مرور جديدة (اختياري)',
+        return DisposeControllers(
+          controllers: [name, username, email, job, password],
+          child: StatefulBuilder(
+            builder: (context, setLocal) {
+              return AlertDialog(
+                title: Text(
+                  user == null ? 'إضافة مستخدم جديد' : 'تعديل المستخدم',
+                ),
+                content: SizedBox(
+                  width: 420,
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        TextField(
+                          controller: name,
+                          decoration: const InputDecoration(labelText: 'الاسم'),
                         ),
-                      ),
-                      const SizedBox(height: 12),
-                      DropdownButton<String>(
-                        value: role,
-                        isExpanded: true,
-                        items: const [
-                          DropdownMenuItem(value: 'operator', child: Text('مشغل الوردية')),
-                          DropdownMenuItem(value: 'station_manager', child: Text('مدير المحطة')),
-                        ],
-                        onChanged: (value) {
-                          if (value != null) {
-                            setLocal(() => role = value);
-                          }
-                        },
-                      ),
-                    ],
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: username,
+                          decoration: const InputDecoration(
+                            labelText: 'اسم المستخدم',
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: email,
+                          decoration: const InputDecoration(
+                            labelText: 'البريد',
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: job,
+                          decoration: const InputDecoration(
+                            labelText: 'المسمى الوظيفي',
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: password,
+                          obscureText: true,
+                          decoration: InputDecoration(
+                            labelText: user == null
+                                ? 'كلمة المرور'
+                                : 'كلمة مرور جديدة (اختياري)',
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        DropdownButton<String>(
+                          value: role,
+                          isExpanded: true,
+                          items: const [
+                            DropdownMenuItem(
+                              value: 'operator',
+                              child: Text('مشغل الوردية'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'station_manager',
+                              child: Text('مدير المحطة'),
+                            ),
+                          ],
+                          onChanged: (value) {
+                            if (value != null) {
+                              setLocal(() => role = value);
+                            }
+                          },
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-              actions: [
-                TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('إلغاء')),
-                FilledButton(
-                  onPressed: () async {
-                    final body = <String, dynamic>{
-                      'full_name': name.text.trim(),
-                      'username': username.text.trim(),
-                      'email': email.text.trim(),
-                      'job_title': job.text.trim(),
-                      'role_code': role,
-                      'is_maintenance': false,
-                    };
-                    if (password.text.isNotEmpty) {
-                      body['password'] = password.text;
-                    }
-                    final ok = user == null
-                        ? await cubit.createUser(body)
-                        : await cubit.updateUser(user.id, body);
-                    if (ok && dialogContext.mounted) {
-                      Navigator.pop(dialogContext, true);
-                    }
-                  },
-                  child: const Text('حفظ'),
-                ),
-              ],
-            );
-          },
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(dialogContext, false),
+                    child: const Text('إلغاء'),
+                  ),
+                  FilledButton(
+                    onPressed: () async {
+                      final body = <String, dynamic>{
+                        'full_name': name.text.trim(),
+                        'username': username.text.trim(),
+                        'email': email.text.trim(),
+                        'job_title': job.text.trim(),
+                        'role_code': role,
+                        'is_maintenance': false,
+                      };
+                      if (password.text.isNotEmpty) {
+                        body['password'] = password.text;
+                      }
+                      final ok = user == null
+                          ? await cubit.createUser(body)
+                          : await cubit.updateUser(user.id, body);
+                      if (ok && dialogContext.mounted) {
+                        Navigator.pop(dialogContext, true);
+                      }
+                    },
+                    child: const Text('حفظ'),
+                  ),
+                ],
+              );
+            },
+          ),
         );
       },
     );
-    name.dispose();
-    username.dispose();
-    email.dispose();
-    job.dispose();
-    password.dispose();
   }
 }
 
@@ -609,7 +681,14 @@ class _AccountTab extends StatelessWidget {
     return ListView(
       padding: managerPagePadding(context),
       children: [
-        const Text('إعدادات الحساب', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.primary)),
+        const Text(
+          'إعدادات الحساب',
+          style: TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.w700,
+            color: AppColors.primary,
+          ),
+        ),
         const SizedBox(height: 8),
         const Text(
           'النظام يقتصر على دورين ثابتين: مدير المحطة ومشغل الوردية.',
@@ -617,7 +696,10 @@ class _AccountTab extends StatelessWidget {
         ),
         if (user != null) ...[
           const SizedBox(height: 16),
-          Text(user.fullName, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+          Text(
+            user.fullName,
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+          ),
           Text(user.roleCode == 'operator' ? 'مشغل الوردية' : 'مدير المحطة'),
         ],
         const SizedBox(height: 24),

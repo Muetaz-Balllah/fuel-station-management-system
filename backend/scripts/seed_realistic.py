@@ -31,7 +31,7 @@ from shifts.routes import CloseDuty, CloseLine, OpenDuty, OpenNozzle
 from shifts.services import approve_duty, close_duty, open_duty
 from stations.models import FuelPrice, FuelProduct, ShiftTemplate, Station
 from supply.models import Supplier, SupplyOrder
-from users.models import Role, User
+from users.models import User
 from utils import utcnow
 
 _WORKERS = (
@@ -61,9 +61,7 @@ def main() -> None:
 
 
 def _ensure_workers(session: Session, station: Station) -> list[User]:
-    role = session.exec(select(Role).where(Role.code == RoleCode.OPERATOR)).first()
-    if role is None:
-        return []
+    role = RoleCode.OPERATOR
     people: list[User] = []
     for username, code, name, title in _WORKERS:
         found = session.exec(
@@ -72,7 +70,7 @@ def _ensure_workers(session: Session, station: Station) -> list[User]:
         if found is None:
             found = User(
                 station_id=station.id,
-                role_id=role.id,
+                role=role,
                 employee_code=code,
                 full_name=name,
                 username=username,

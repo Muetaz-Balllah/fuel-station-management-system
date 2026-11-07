@@ -23,6 +23,10 @@ class DutyCloseReviewBody extends StatelessWidget {
           style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.primary),
         ),
         const SizedBox(height: 8),
+        if (duty.meterAdjusted) ...[
+          _MeterAdjustmentNotice(duty: duty),
+          const SizedBox(height: 8),
+        ],
         if (duty.lines.isEmpty)
           const Text('لا توجد قراءات مسجّلة.')
         else
@@ -133,7 +137,12 @@ class _LinesTable extends StatelessWidget {
                   ),
                   SizedBox(
                     width: opening,
-                    child: Text(line.openingMeter, style: cell, maxLines: 1, overflow: TextOverflow.ellipsis),
+                    child: Text(
+                      line.meterAdjusted ? '${line.openingMeter}\nعُدّل من ${line.previousMeter ?? '—'}' : line.openingMeter,
+                      style: cell.copyWith(color: line.meterAdjusted ? const Color(0xFFB45309) : null, fontWeight: line.meterAdjusted ? FontWeight.w700 : null),
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                   SizedBox(
                     width: closing,
@@ -173,6 +182,57 @@ class _LinesTable extends StatelessWidget {
       cash: '0',
     );
     return preview?.liters ?? '—';
+  }
+}
+
+class _MeterAdjustmentNotice extends StatelessWidget {
+  const _MeterAdjustmentNotice({required this.duty});
+
+  final DutyRecord duty;
+
+  @override
+  Widget build(BuildContext context) {
+    final notes = duty.meterAdjustments.isNotEmpty
+        ? duty.meterAdjustments
+        : [
+            for (final line in duty.lines.where((item) => item.meterAdjusted))
+              MeterAdjustment(
+                nozzleCode: line.nozzleCode,
+                previousMeter: line.previousMeter ?? '—',
+                newMeter: line.openingMeter,
+                reason: line.meterReason ?? '',
+                actorName: line.adjustedByName ?? '',
+                createdAtLabel: '',
+              ),
+          ];
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFFBEB),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFF59E0B), width: 1.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'تعديل على عداد المسدس',
+            style: TextStyle(fontWeight: FontWeight.w800, color: Color(0xFFB45309)),
+          ),
+          const SizedBox(height: 6),
+          for (final note in notes)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Text(
+                'مسدس ${note.nozzleCode}: من ${note.previousMeter} إلى ${note.newMeter}'
+                '${note.actorName.isEmpty ? '' : ' • ${note.actorName}'}'
+                '${note.reason.isEmpty ? '' : ' • السبب: ${note.reason}'}',
+                style: const TextStyle(fontSize: 12, height: 1.4, color: Color(0xFF92400E)),
+              ),
+            ),
+        ],
+      ),
+    );
   }
 }
 

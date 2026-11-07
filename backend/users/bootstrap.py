@@ -4,24 +4,13 @@ from decimal import Decimal
 from sqlmodel import Session, select
 
 from core.security import hash_password
-from enums import PermissionCode, RoleCode
+from enums import RoleCode
 from stations.models import FuelPrice, FuelProduct, Station
-from users.models import Permission, Role, RolePermission, User
+from users.models import User
 
 # The mock prints 2024-12-31, which is already past. The live station is licensed
 # through the next renewal so Phase 7's 30-day warning does not fire on a fresh seed.
 _LICENSE_EXPIRES = date(2027, 12, 31)
-
-_ROLE_NAMES = {
-    RoleCode.STATION_MANAGER: "مدير المحطة",
-    RoleCode.OPERATOR: "موظف",
-}
-
-_ROLE_GRANTS = {
-    RoleCode.STATION_MANAGER: PermissionCode.ALL,
-    RoleCode.OPERATOR: [PermissionCode.SHIFTS_OPERATE],
-}
-
 
 def seed(session: Session, settings) -> None:
     station = session.exec(select(Station).where(Station.code == "ST-104")).first()
@@ -38,43 +27,10 @@ def seed(session: Session, settings) -> None:
         session.add(station)
         session.flush()
 
-    roles: dict[str, Role] = {}
-    for code, name in _ROLE_NAMES.items():
-        role = session.exec(select(Role).where(Role.code == code)).first()
-        if role is None:
-            role = Role(code=code, name_ar=name, is_system=True)
-            session.add(role)
-            session.flush()
-        roles[code] = role
-
-    permissions: dict[str, Permission] = {}
-    for code in PermissionCode.ALL:
-        permission = session.exec(
-            select(Permission).where(Permission.code == code)
-        ).first()
-        if permission is None:
-            permission = Permission(code=code)
-            session.add(permission)
-            session.flush()
-        permissions[code] = permission
-
-    for role_code, grants in _ROLE_GRANTS.items():
-        role = roles[role_code]
-        existing = session.exec(
-            select(RolePermission).where(RolePermission.role_id == role.id)
-        ).all()
-        held = {row.permission_id for row in existing}
-        for grant in grants:
-            permission = permissions[grant]
-            if permission.id not in held:
-                session.add(
-                    RolePermission(role_id=role.id, permission_id=permission.id)
-                )
-
     _ensure_user(
         session,
         station=station,
-        role=roles[RoleCode.STATION_MANAGER],
+        role=RoleCode.STATION_MANAGER,
         username=settings.seed_manager_username,
         password=settings.seed_manager_password,
         employee_code="EMP-0001",
@@ -85,7 +41,7 @@ def seed(session: Session, settings) -> None:
     _ensure_user(
         session,
         station=station,
-        role=roles[RoleCode.OPERATOR],
+        role=RoleCode.OPERATOR,
         username=settings.seed_operator_username,
         password=settings.seed_operator_password,
         employee_code="EMP-0122",
@@ -108,7 +64,7 @@ def _ensure_user(
     session: Session,
     *,
     station: Station,
-    role: Role,
+    role: str,
     username: str,
     password: str,
     employee_code: str,
@@ -127,7 +83,7 @@ def _ensure_user(
     session.add(
         User(
             station_id=station.id,
-            role_id=role.id,
+            role=role,
             employee_code=employee_code,
             full_name=full_name,
             username=username,

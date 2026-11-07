@@ -126,6 +126,14 @@ class AssetsCubit extends Cubit<AssetsState> {
 
   Future<bool> deleteNozzle(String nozzleId) => _mutate(() => _repository.deleteNozzle(nozzleId));
 
+  Future<bool> adjustNozzleMeter({
+    required String nozzleId,
+    required String meter,
+    required String reason,
+  }) {
+    return _mutate(() => _repository.adjustNozzleMeter(nozzleId: nozzleId, meter: meter, reason: reason));
+  }
+
   Future<bool> setNozzleStatus({required String nozzleId, required String status}) {
     return _mutate(() => _repository.updateNozzleStatus(nozzleId: nozzleId, status: status));
   }

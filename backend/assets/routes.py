@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel
 from sqlmodel import Session
 
@@ -20,7 +20,8 @@ from assets.services import (
     update_pump,
     update_tank,
 )
-from core.deps import require_permission
+from core.deps import require_any_permission, require_permission
+from shifts.services import correct_nozzle_meter
 from db import get_session
 from users.models import User
 
@@ -64,6 +65,11 @@ class NozzleCreate(BaseModel):
 class NozzleUpdate(BaseModel):
     label: str | None = None
     status: str | None = None
+
+
+class NozzleMeterUpdate(BaseModel):
+    meter: str
+    reason: str
 
 
 @router.get("/tanks")
@@ -170,6 +176,18 @@ def remove_pump(
 ) -> Response:
     delete_pump(session, user, pump_id)
     return Response(status_code=204)
+
+
+@router.post("/nozzles/{nozzle_id}/meter")
+def post_nozzle_meter(
+    nozzle_id: uuid.UUID,
+    payload: NozzleMeterUpdate,
+    request: Request,
+    user: User = Depends(require_any_permission("shifts.operate", "assets.manage")),
+    session: Session = Depends(get_session),
+) -> dict:
+    granted = tuple(getattr(request.state, "permissions", ()))
+    return correct_nozzle_meter(session, user, nozzle_id, payload.meter, payload.reason, granted)
 
 
 @router.delete("/nozzles/{nozzle_id}", status_code=204)

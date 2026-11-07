@@ -154,25 +154,6 @@ class SettingsCubit extends Cubit<SettingsState> {
     });
   }
 
-  Future<void> setPermission(RoleGrant role, String code, bool enabled) async {
-    final next = [...role.permissions];
-    if (enabled) {
-      if (!next.contains(code)) {
-        next.add(code);
-      }
-    } else {
-      next.remove(code);
-    }
-    emit(state.copyWith(loading: true, clearError: true));
-    try {
-      await _repository.replacePermissions(role.id, next);
-      final roles = await _repository.fetchRoles();
-      emit(state.copyWith(loading: false, roles: roles));
-    } on ApiException catch (error) {
-      emit(state.copyWith(loading: false, error: error.message));
-    }
-  }
-
   Future<void> addPrice(String productId, String price) async {
     emit(state.copyWith(loading: true, clearError: true));
     try {

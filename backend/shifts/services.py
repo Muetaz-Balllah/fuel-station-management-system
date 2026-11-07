@@ -8,8 +8,9 @@ from alerts import note_tank_crossing
 from assets.levels import station_timezone
 from assets.models import InventoryMovement, Nozzle, Pump, Tank
 from attendance.models import Attendance, ShiftAssignment, ShiftSession
+from enums import RoleCode
 from errors import AppError
-from shifts.models import Notification, ShiftDuty, ShiftReading
+from shifts.models import NozzleMeterAdjustment, Notification, ShiftDuty, ShiftReading
 from shifts.reconciliation import (
     format_liters,
     format_money,
@@ -22,7 +23,7 @@ from shifts.reconciliation import (
 )
 from stations.models import FuelPrice, FuelProduct, ShiftTemplate, Station
 from users.audit import write_audit
-from users.models import Permission, RolePermission, User
+from users.models import User
 from utils import as_utc, utcnow
 
 _OPEN_STATUSES = {"present", "late", "assigned"}
@@ -98,6 +99,7 @@ def my_assignment(session: Session, user: User) -> dict:
 
 
 def open_duty(session: Session, user: User, payload, permissions: tuple[str, ...]) -> dict:
+    del permissions
     shift = _resolve_shift(session, user, payload)
     attendance = session.exec(
         select(Attendance).where(
@@ -125,8 +127,7 @@ def open_duty(session: Session, user: User, payload, permissions: tuple[str, ...
         requested.append(nozzle_id)
     if len(set(requested)) != len(requested):
         raise AppError("NOZZLE_BUSY", "لا يمكن تكرار المسدس في الوردية نفسها.", 409)
-    override = "meter.override" in permissions
-    mismatched = False
+    reason = (payload.reason or "").strip()
     prepared = []
     for item in payload.nozzles:
         nozzle_id = _uuid(item.nozzle_id, "المسدس غير معروف.")
@@ -137,20 +138,11 @@ def open_duty(session: Session, user: User, payload, permissions: tuple[str, ...
             raise AppError("NOZZLE_UNAVAILABLE", "المسدس غير جاهز للتشغيل.", 409)
         _ensure_free(session, nozzle.id)
         opening = _meter(item.opening_meter)
-        if opening != q_liters(nozzle.current_meter):
-            mismatched = True
-            if not override:
-                raise AppError(
-                    "METER_MISMATCH",
-                    "قراءة الافتتاح لا تطابق آخر إغلاق للعداد.",
-                    409,
-                )
+        official = q_liters(nozzle.current_meter)
+        if opening != official and not reason:
+            raise AppError("REASON_REQUIRED", "اكتب سبب تعديل قراءة العداد.", 422)
         price = _price_for_nozzle(session, nozzle)
-        prepared.append((nozzle, opening, price))
-    if mismatched:
-        reason = (payload.reason or "").strip()
-        if not reason:
-            raise AppError("REASON_REQUIRED", "اكتب سبب تعديل قراءة الافتتاح.", 422)
+        prepared.append((nozzle, opening, official, price))
     duty = ShiftDuty(
         station_id=user.station_id,
         session_id=shift.id,
@@ -162,7 +154,12 @@ def open_duty(session: Session, user: User, payload, permissions: tuple[str, ...
     )
     session.add(duty)
     session.flush()
-    for nozzle, opening, price in prepared:
+    for nozzle, opening, official, price in prepared:
+        inherited = None if opening != official else _unlinked_adjustment(session, nozzle.id, opening)
+        adjusted = opening != official or inherited is not None
+        previous = official if opening != official else (q_liters(inherited.previous_meter) if inherited else None)
+        note = reason if opening != official else (inherited.reason if inherited else None)
+        actor_id = user.id if opening != official else (inherited.actor_id if inherited else None)
         session.add(
             ShiftReading(
                 duty_id=duty.id,
@@ -170,8 +167,31 @@ def open_duty(session: Session, user: User, payload, permissions: tuple[str, ...
                 price_id=price.id,
                 opening_meter=opening,
                 unit_price=q_liters(price.price_per_liter),
+                meter_adjusted=adjusted,
+                previous_meter=previous,
+                meter_reason=note,
+                adjusted_by=actor_id,
             )
         )
+        if opening != official:
+            session.add(
+                NozzleMeterAdjustment(
+                    station_id=user.station_id,
+                    nozzle_id=nozzle.id,
+                    duty_id=duty.id,
+                    actor_id=user.id,
+                    previous_meter=official,
+                    new_meter=opening,
+                    reason=reason,
+                )
+            )
+        elif inherited is not None:
+            inherited.duty_id = duty.id
+            session.add(inherited)
+        if adjusted and opening != official:
+            nozzle.current_meter = opening
+            nozzle.updated_at = utcnow()
+            session.add(nozzle)
     if attendance.check_in_at is None:
         attendance.check_in_at = utcnow()
         attendance.updated_at = utcnow()
@@ -590,19 +610,11 @@ def _figures_match(duty: ShiftDuty, figures: dict) -> bool:
 
 
 def _notify_approvers(session: Session, actor: User, duty: ShiftDuty) -> None:
-    permission = session.exec(select(Permission).where(Permission.code == "shifts.approve")).first()
-    if permission is None:
-        return
-    role_ids = session.exec(
-        select(RolePermission.role_id).where(RolePermission.permission_id == permission.id)
-    ).all()
-    if not role_ids:
-        return
     people = session.exec(
         select(User).where(
             User.station_id == actor.station_id,
             User.is_active == True,  # noqa: E712
-            User.role_id.in_(role_ids),  # type: ignore[attr-defined]
+            User.role == RoleCode.STATION_MANAGER,
         )
     ).all()
     for person in people:
@@ -665,6 +677,10 @@ def _duty_public(session: Session, duty: ShiftDuty) -> dict:
                 "product_name": product.name_ar if product else "",
                 "opening_meter": format_liters(reading.opening_meter),
                 "closing_meter": format_liters(reading.closing_meter) if reading.closing_meter is not None else None,
+                "meter_adjusted": reading.meter_adjusted,
+                "previous_meter": format_liters(reading.previous_meter) if reading.previous_meter is not None else None,
+                "meter_reason": reading.meter_reason,
+                "adjusted_by_name": _person_name(session, reading.adjusted_by),
                 "liters": format_liters(reading.liters) if reading.liters is not None else None,
                 "unit_price": format_price(reading.unit_price),
                 "line_amount": format_money(reading.line_amount) if reading.line_amount is not None else None,
@@ -706,6 +722,7 @@ def _duty_public(session: Session, duty: ShiftDuty) -> dict:
         "variance_kind": kind,
         "variance_label": variance_label(duty.variance) if duty.variance is not None else None,
         "lines": lines,
+        "meter_adjustments": _meter_adjustments(session, duty, tz),
     }
 
 
@@ -1235,6 +1252,252 @@ def _lock_tank(session: Session, tank_id: uuid.UUID) -> Tank:
         statement = statement.with_for_update()
     tank = session.exec(statement).one()
     return tank
+
+
+def adjust_duty_meters(session: Session, user: User, duty_id: str, payload, permissions: tuple[str, ...]) -> dict:
+    duty = _duty(session, user, duty_id)
+    if duty.status not in {"open", "rejected", "pending_approval"}:
+        raise AppError("DUTY_CLOSED", "لا يمكن تعديل عداد وردية معتمدة.", 409)
+    if duty.user_id != user.id and "shifts.approve" not in permissions:
+        raise AppError("FORBIDDEN", "تعديل عداد هذه الوردية متاح لصاحبها أو لمدير المحطة.", 403)
+    reason = (payload.reason or "").strip()
+    if not reason:
+        raise AppError("REASON_REQUIRED", "اكتب سبب تعديل العداد.", 422)
+    if not payload.lines:
+        raise AppError("VALIDATION_ERROR", "حدد المسدس والقراءة الجديدة.", 422)
+    readings = {row.nozzle_id: row for row in _readings(session, duty.id)}
+    changed = False
+    for item in payload.lines:
+        nozzle_id = _uuid(item.nozzle_id, "المسدس غير معروف.")
+        reading = readings.get(nozzle_id)
+        if reading is None:
+            raise AppError("NOT_ASSIGNED", "هذا المسدس ليس ضمن الوردية.", 409)
+        new_meter = _meter(item.opening_meter)
+        if new_meter == q_liters(reading.opening_meter):
+            continue
+        baseline = (
+            q_liters(reading.previous_meter)
+            if reading.meter_adjusted and reading.previous_meter is not None
+            else q_liters(reading.opening_meter)
+        )
+        _stamp_reading_meter(session, user, duty, reading, baseline, new_meter, reason)
+        changed = True
+    if not changed:
+        raise AppError("VALIDATION_ERROR", "العداد لم يتغير.", 422)
+    if duty.status in {"pending_approval", "rejected"}:
+        _reprice_duty(session, duty)
+    write_audit(
+        session,
+        actor_id=user.id,
+        action="meter_adjusted",
+        entity="shift_duty",
+        entity_id=str(duty.id),
+        detail={"reason": reason},
+    )
+    session.commit()
+    session.refresh(duty)
+    return _duty_public(session, duty)
+
+
+def correct_nozzle_meter(session: Session, user: User, nozzle_id: uuid.UUID, meter: str, reason: str, permissions: tuple[str, ...]) -> dict:
+    if "shifts.operate" not in permissions and "assets.manage" not in permissions:
+        raise AppError("FORBIDDEN", "ليست لديك صلاحية لتنفيذ هذا الإجراء.", 403)
+    note = reason.strip()
+    if not note:
+        raise AppError("REASON_REQUIRED", "اكتب سبب تعديل العداد.", 422)
+    nozzle, _pump = _nozzle_pump(session, nozzle_id)
+    if nozzle.station_id != user.station_id:
+        raise AppError("NOZZLE_NOT_FOUND", "تعذر العثور على المسدس.", 404)
+    new_meter = _meter(meter)
+    active = _active_reading(session, nozzle.id)
+    if active is not None:
+        reading, duty = active
+        if duty.user_id != user.id and "shifts.approve" not in permissions:
+            raise AppError("FORBIDDEN", "تعديل عداد هذه الوردية متاح لصاحبها أو لمدير المحطة.", 403)
+        if new_meter == q_liters(reading.opening_meter):
+            raise AppError("VALIDATION_ERROR", "العداد لم يتغير.", 422)
+        baseline = (
+            q_liters(reading.previous_meter)
+            if reading.meter_adjusted and reading.previous_meter is not None
+            else q_liters(reading.opening_meter)
+        )
+        _stamp_reading_meter(session, user, duty, reading, baseline, new_meter, note)
+        if duty.status in {"pending_approval", "rejected"}:
+            _reprice_duty(session, duty)
+        write_audit(
+            session,
+            actor_id=user.id,
+            action="meter_adjusted",
+            entity="nozzle",
+            entity_id=str(nozzle.id),
+            detail={"duty_id": str(duty.id), "reason": note, "meter": format_liters(new_meter)},
+        )
+        session.commit()
+        return _duty_public(session, duty)
+    previous = q_liters(nozzle.current_meter)
+    if new_meter == previous:
+        raise AppError("VALIDATION_ERROR", "العداد لم يتغير.", 422)
+    nozzle.current_meter = new_meter
+    nozzle.updated_at = utcnow()
+    session.add(nozzle)
+    session.add(
+        NozzleMeterAdjustment(
+            station_id=user.station_id,
+            nozzle_id=nozzle.id,
+            actor_id=user.id,
+            previous_meter=previous,
+            new_meter=new_meter,
+            reason=note,
+        )
+    )
+    write_audit(
+        session,
+        actor_id=user.id,
+        action="meter_adjusted",
+        entity="nozzle",
+        entity_id=str(nozzle.id),
+        detail={"previous_meter": format_liters(previous), "new_meter": format_liters(new_meter), "reason": note},
+    )
+    session.commit()
+    session.refresh(nozzle)
+    return {
+        "id": str(nozzle.id),
+        "current_meter": format_liters(nozzle.current_meter),
+        "meter_adjusted": True,
+        "previous_meter": format_liters(previous),
+        "meter_reason": note,
+    }
+
+
+def _stamp_reading_meter(
+    session: Session,
+    user: User,
+    duty: ShiftDuty,
+    reading: ShiftReading,
+    baseline: Decimal,
+    new_meter: Decimal,
+    reason: str,
+) -> None:
+    replaced = q_liters(reading.opening_meter)
+    reading.opening_meter = new_meter
+    reading.meter_adjusted = new_meter != baseline
+    reading.previous_meter = baseline if reading.meter_adjusted else None
+    reading.meter_reason = reason if reading.meter_adjusted else None
+    reading.adjusted_by = user.id if reading.meter_adjusted else None
+    session.add(reading)
+    nozzle = session.get(Nozzle, reading.nozzle_id)
+    if nozzle is not None:
+        nozzle.current_meter = new_meter
+        nozzle.updated_at = utcnow()
+        session.add(nozzle)
+    session.add(
+        NozzleMeterAdjustment(
+            station_id=duty.station_id,
+            nozzle_id=reading.nozzle_id,
+            duty_id=duty.id,
+            actor_id=user.id,
+            previous_meter=replaced,
+            new_meter=new_meter,
+            reason=reason,
+        )
+    )
+
+
+def _reprice_duty(session: Session, duty: ShiftDuty) -> None:
+    readings = _readings(session, duty.id)
+    if any(row.closing_meter is None for row in readings) or duty.cash_handed is None:
+        return
+    lines = []
+    for reading in readings:
+        if not reading.rollover and q_liters(reading.closing_meter) < q_liters(reading.opening_meter):
+            raise AppError("METER_REGRESSION", "قراءة الإغلاق أقل من قراءة الافتتاح بعد تعديل العداد.", 422)
+        lines.append(
+            {
+                "nozzle_id": str(reading.nozzle_id),
+                "opening": reading.opening_meter,
+                "closing": reading.closing_meter,
+                "unit_price": reading.unit_price,
+                "rollover": reading.rollover,
+                "rollover_at": reading.rollover_at,
+            }
+        )
+    try:
+        figures = reconcile(lines, duty.cash_handed)
+    except ValueError as exc:
+        raise AppError("METER_REGRESSION", "قراءة الإغلاق أقل من قراءة الافتتاح بعد تعديل العداد.", 422) from exc
+    amounts = {line["nozzle_id"]: line for line in figures["lines"]}
+    for reading in readings:
+        amount = amounts[str(reading.nozzle_id)]
+        reading.liters = amount["liters"]
+        reading.line_amount = amount["line_amount"]
+        session.add(reading)
+    duty.expected_cash = figures["expected_cash"]
+    duty.variance = figures["variance"]
+    duty.updated_at = utcnow()
+    session.add(duty)
+
+
+def _active_reading(session: Session, nozzle_id: uuid.UUID) -> tuple[ShiftReading, ShiftDuty] | None:
+    duties = session.exec(
+        select(ShiftDuty).where(ShiftDuty.status.in_(["open", "pending_approval", "rejected"]))  # type: ignore[attr-defined]
+    ).all()
+    if not duties:
+        return None
+    by_id = {duty.id: duty for duty in duties}
+    reading = session.exec(
+        select(ShiftReading).where(
+            ShiftReading.nozzle_id == nozzle_id,
+            ShiftReading.duty_id.in_(list(by_id)),  # type: ignore[attr-defined]
+        )
+    ).first()
+    if reading is None:
+        return None
+    return reading, by_id[reading.duty_id]
+
+
+def _unlinked_adjustment(session: Session, nozzle_id: uuid.UUID, opening: Decimal) -> NozzleMeterAdjustment | None:
+    rows = session.exec(
+        select(NozzleMeterAdjustment)
+        .where(NozzleMeterAdjustment.nozzle_id == nozzle_id)
+        .order_by(NozzleMeterAdjustment.created_at.desc())
+    ).all()
+    for row in rows:
+        if row.duty_id is not None:
+            continue
+        if q_liters(row.new_meter) == opening and q_liters(row.previous_meter) != opening:
+            return row
+    return None
+
+
+def _meter_adjustments(session: Session, duty: ShiftDuty, tz) -> list[dict]:
+    rows = session.exec(
+        select(NozzleMeterAdjustment)
+        .where(NozzleMeterAdjustment.duty_id == duty.id)
+        .order_by(NozzleMeterAdjustment.created_at)
+    ).all()
+    notes = []
+    for row in rows:
+        nozzle = session.get(Nozzle, row.nozzle_id)
+        notes.append(
+            {
+                "id": str(row.id),
+                "nozzle_id": str(row.nozzle_id),
+                "nozzle_code": nozzle.code if nozzle else "",
+                "previous_meter": format_liters(row.previous_meter),
+                "new_meter": format_liters(row.new_meter),
+                "reason": row.reason,
+                "actor_name": _person_name(session, row.actor_id) or "",
+                "created_at_label": _local_clock(row.created_at, tz),
+            }
+        )
+    return notes
+
+
+def _person_name(session: Session, user_id: uuid.UUID | None) -> str | None:
+    if user_id is None:
+        return None
+    person = session.get(User, user_id)
+    return person.full_name if person else None
 
 
 def _meter(raw: str) -> Decimal:

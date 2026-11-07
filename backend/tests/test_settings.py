@@ -169,24 +169,23 @@ def test_operator_cannot_open_settings(client):
     ).status_code == 403
 
 
-def test_manager_replaces_operator_permissions(client):
-    manager = login(client, "manager", "Manager@12345")["access_token"]
-    roles = client.get("/api/v1/roles", headers=auth_header(manager)).json()["items"]
+def test_roles_are_fixed_on_the_user(client):
+    manager = login(client, "manager", "Manager@12345")
+    assert "shifts.operate" in manager["user"]["permissions"]
+    assert "users.manage" in manager["user"]["permissions"]
+    roles = client.get("/api/v1/roles", headers=auth_header(manager["access_token"])).json()["items"]
     assert [item["code"] for item in roles] == ["station_manager", "operator"]
     operator_role = next(item for item in roles if item["code"] == "operator")
-    updated = client.put(
-        f"/api/v1/roles/{operator_role['id']}/permissions",
-        headers=auth_header(manager),
+    assert operator_role["permissions"] == ["shifts.operate"]
+    manager_role = next(item for item in roles if item["code"] == "station_manager")
+    assert "shifts.operate" in manager_role["permissions"]
+    assert "shifts.approve" in manager_role["permissions"]
+    rejected = client.put(
+        "/api/v1/roles/operator/permissions",
+        headers=auth_header(manager["access_token"]),
         json={"permissions": ["shifts.operate", "shifts.view_all"]},
     )
-    assert updated.status_code == 200, updated.text
-    assert "shifts.view_all" in updated.json()["permissions"]
-    restored = client.put(
-        f"/api/v1/roles/{operator_role['id']}/permissions",
-        headers=auth_header(manager),
-        json={"permissions": ["shifts.operate"]},
-    )
-    assert restored.status_code == 200
+    assert rejected.status_code == 404
 
 
 def test_logo_upload(client):

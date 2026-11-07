@@ -48,8 +48,26 @@ class ShiftReading(SQLModel, table=True):
     liters: Decimal | None = Field(default=None, sa_column=Column(Numeric(14, 3)))
     unit_price: Decimal = Field(sa_column=Column(Numeric(14, 3), nullable=False))
     line_amount: Decimal | None = Field(default=None, sa_column=Column(Numeric(14, 2)))
+    meter_adjusted: bool = False
+    previous_meter: Decimal | None = Field(default=None, sa_column=Column(Numeric(16, 3)))
+    meter_reason: str | None = Field(default=None, max_length=300)
+    adjusted_by: uuid.UUID | None = Field(default=None, foreign_key="users.id")
     rollover: bool = False
     rollover_at: Decimal | None = Field(default=None, sa_column=Column(Numeric(16, 3)))
+    created_at: datetime = Field(default_factory=utcnow)
+
+
+class NozzleMeterAdjustment(SQLModel, table=True):
+    __tablename__ = "nozzle_meter_adjustments"
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    station_id: uuid.UUID = Field(foreign_key="stations.id", index=True)
+    nozzle_id: uuid.UUID = Field(foreign_key="nozzles.id", index=True)
+    duty_id: uuid.UUID | None = Field(default=None, foreign_key="shift_duties.id", index=True)
+    actor_id: uuid.UUID = Field(foreign_key="users.id", index=True)
+    previous_meter: Decimal = Field(sa_column=Column(Numeric(16, 3), nullable=False))
+    new_meter: Decimal = Field(sa_column=Column(Numeric(16, 3), nullable=False))
+    reason: str = Field(max_length=300)
     created_at: datetime = Field(default_factory=utcnow)
 
 

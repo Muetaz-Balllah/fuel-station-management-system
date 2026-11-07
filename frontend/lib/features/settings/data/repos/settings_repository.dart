@@ -85,16 +85,6 @@ class SettingsRepository {
     });
   }
 
-  Future<RoleGrant> replacePermissions(String roleId, List<String> permissions) {
-    return _guard(() async {
-      final response = await _dio.put(
-        '/api/v1/roles/$roleId/permissions',
-        data: {'permissions': permissions},
-      );
-      return RoleGrant.fromJson(response.data as Map<String, dynamic>);
-    });
-  }
-
   Future<List<FuelProductItem>> fetchProducts() {
     return _guard(() async {
       final response = await _dio.get('/api/v1/products');

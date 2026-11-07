@@ -4,10 +4,13 @@ import 'package:frontend/core/widgets/dispose_controllers.dart';
 import 'package:frontend/features/shifts/data/models/shift_models.dart';
 import 'package:frontend/features/shifts/ui/duty_audit_dialog.dart';
 import 'package:frontend/features/shifts/ui/duty_close_review.dart';
+import 'package:frontend/features/shifts/ui/meter_edit_dialog.dart';
 
 typedef DutyAction = Future<String?> Function(String dutyId);
 typedef DutyRejectAction =
     Future<String?> Function(String dutyId, String reason);
+typedef DutyMeterAction =
+    Future<String?> Function(String dutyId, String reason, List<Map<String, String>> lines);
 
 class DutyApprovalPanel extends StatelessWidget {
   const DutyApprovalPanel({
@@ -15,12 +18,14 @@ class DutyApprovalPanel extends StatelessWidget {
     required this.duties,
     required this.onApprove,
     required this.onReject,
+    this.onAdjustMeters,
     this.title = 'اعتماد إغلاق الورديات',
   });
 
   final List<DutyRecord> duties;
   final DutyAction onApprove;
   final DutyRejectAction onReject;
+  final DutyMeterAction? onAdjustMeters;
   final String title;
 
   @override
@@ -80,6 +85,7 @@ class DutyApprovalPanel extends StatelessWidget {
               duty: duty,
               onApprove: onApprove,
               onReject: onReject,
+              onAdjustMeters: onAdjustMeters,
             ),
         ],
         if (others.isNotEmpty) ...[
@@ -94,6 +100,7 @@ class DutyApprovalPanel extends StatelessWidget {
               duty: duty,
               onApprove: onApprove,
               onReject: onReject,
+              onAdjustMeters: onAdjustMeters,
               compact: true,
             ),
         ],
@@ -108,12 +115,14 @@ class DutyApprovalCard extends StatelessWidget {
     required this.duty,
     required this.onApprove,
     required this.onReject,
+    this.onAdjustMeters,
     this.compact = false,
   });
 
   final DutyRecord duty;
   final DutyAction onApprove;
   final DutyRejectAction onReject;
+  final DutyMeterAction? onAdjustMeters;
   final bool compact;
 
   @override
@@ -194,6 +203,14 @@ class DutyApprovalCard extends StatelessWidget {
                     '${duty.liters ?? '—'} لتر • ${duty.varianceLabel ?? '—'}',
                   ),
                 ),
+              if (duty.meterAdjusted && compact)
+                const Padding(
+                  padding: EdgeInsets.only(top: 8),
+                  child: Text(
+                    'تم تعديل عداد المسدس — افتح المحضر لرؤية القراءة السابقة والسبب',
+                    style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFFB45309)),
+                  ),
+                ),
               if (pending) ...[
                 const SizedBox(height: 12),
                 Wrap(
@@ -206,6 +223,12 @@ class DutyApprovalCard extends StatelessWidget {
                       icon: const Icon(Icons.verified_outlined, size: 18),
                       label: const Text('اعتماد المحضر'),
                     ),
+                    if (onAdjustMeters != null)
+                      OutlinedButton.icon(
+                        onPressed: () => _adjust(context),
+                        icon: const Icon(Icons.speed, size: 18),
+                        label: const Text('تعديل العداد'),
+                      ),
                     OutlinedButton.icon(
                       key: Key('duty-reject-${duty.id}'),
                       onPressed: () => _reject(context),
@@ -235,6 +258,17 @@ class DutyApprovalCard extends StatelessWidget {
 
   Future<void> _approve(BuildContext context) async {
     final message = await onApprove(duty.id);
+    if (message != null && context.mounted) {
+      await showDutyActionErrorDialog(context, message);
+    }
+  }
+
+  Future<void> _adjust(BuildContext context) async {
+    final request = await showMeterEditDialog(context, lines: duty.lines);
+    if (request == null || !context.mounted || onAdjustMeters == null) {
+      return;
+    }
+    final message = await onAdjustMeters!(duty.id, request.reason, request.lines);
     if (message != null && context.mounted) {
       await showDutyActionErrorDialog(context, message);
     }

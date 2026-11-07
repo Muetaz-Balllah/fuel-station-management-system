@@ -265,6 +265,8 @@ class _AttendanceOperationsTabState extends State<AttendanceOperationsTab> {
           onApprove: (id) => context.read<AttendanceCubit>().approveDuty(id),
           onReject: (id, reason) =>
               context.read<AttendanceCubit>().rejectDuty(id, reason),
+          onAdjustMeters: (id, reason, lines) =>
+              context.read<AttendanceCubit>().adjustDutyMeters(id, reason, lines),
         ),
         PaginationBar(
           page: state.dutiesPage,

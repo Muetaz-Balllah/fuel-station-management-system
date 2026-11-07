@@ -72,6 +72,7 @@ class ShiftRepository {
     String? sessionId,
     String? templateId,
     required List<AssignedNozzle> nozzles,
+    String? meterReason,
   }) {
     return _guard(() async {
       final response = await _dio.post(
@@ -79,6 +80,7 @@ class ShiftRepository {
         data: {
           if (sessionId != null && sessionId.isNotEmpty) 'session_id': sessionId,
           if (templateId != null && templateId.isNotEmpty) 'template_id': templateId,
+          if (meterReason != null && meterReason.trim().isNotEmpty) 'reason': meterReason.trim(),
           'nozzles': [
             for (final nozzle in nozzles)
               {'nozzle_id': nozzle.id, 'opening_meter': nozzle.currentMeter},
@@ -86,6 +88,19 @@ class ShiftRepository {
         },
       );
       return DutyRecord.fromJson(response.data as Map<String, dynamic>);
+    });
+  }
+
+  Future<void> adjustMeters({
+    required String dutyId,
+    required String reason,
+    required List<Map<String, String>> lines,
+  }) {
+    return _guard(() async {
+      await _dio.post(
+        '/api/v1/duties/$dutyId/meters',
+        data: {'reason': reason, 'lines': lines},
+      );
     });
   }
 

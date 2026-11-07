@@ -104,6 +104,19 @@ class AssetsRepository {
     });
   }
 
+  Future<void> adjustNozzleMeter({
+    required String nozzleId,
+    required String meter,
+    required String reason,
+  }) {
+    return _guard(() async {
+      await _dio.post(
+        '/api/v1/nozzles/$nozzleId/meter',
+        data: {'meter': meter, 'reason': reason},
+      );
+    });
+  }
+
   Future<void> updateNozzleStatus({required String nozzleId, required String status}) {
     return _guard(() async {
       await _dio.patch('/api/v1/nozzles/$nozzleId', data: {'status': status});

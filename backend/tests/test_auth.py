@@ -134,14 +134,11 @@ def test_lockout_after_repeated_failures(client):
     username = "lock-probe"
     with Session(engine) as session:
         from core.security import hash_password
-        from users.models import Role
-
         template = session.exec(select(User).where(User.username == "operator")).one()
-        role = session.exec(select(Role).where(Role.code == "operator")).one()
         session.add(
             User(
                 station_id=template.station_id,
-                role_id=role.id,
+                role="operator",
                 employee_code="EMP-LOCK",
                 full_name="حساب القفل",
                 username=username,

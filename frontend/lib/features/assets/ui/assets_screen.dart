@@ -540,6 +540,10 @@ class _NozzleRow extends StatelessWidget {
             ),
           ),
           TextButton(
+            onPressed: () => _editNozzleMeter(context, nozzle),
+            child: const Text('تعديل العداد'),
+          ),
+          TextButton(
             onPressed: () => cubit.setNozzleStatus(
               nozzleId: nozzle.id,
               status: ready ? 'valve_check' : 'ready',
@@ -1027,6 +1031,62 @@ Future<void> _addNozzle(BuildContext context, PumpCardData card) async {
               ],
             );
           },
+        ),
+      );
+    },
+  );
+}
+
+Future<void> _editNozzleMeter(BuildContext context, AssetNozzle nozzle) async {
+  final cubit = context.read<AssetsCubit>();
+  final meter = TextEditingController(text: nozzle.currentMeter);
+  final reason = TextEditingController();
+  await showDialog<void>(
+    context: context,
+    builder: (dialogContext) {
+      return DisposeControllers(
+        controllers: [meter, reason],
+        child: AlertDialog(
+          title: Text('تعديل عداد ${nozzle.code}'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'يُحفظ التعديل في السجل، ويظهر على الوردية المفتوحة أو عند اعتمادها.',
+                style: TextStyle(height: 1.4),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: meter,
+                decoration: const InputDecoration(labelText: 'قراءة العداد'),
+              ),
+              TextField(
+                controller: reason,
+                decoration: const InputDecoration(labelText: 'السبب'),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('إلغاء')),
+            FilledButton(
+              onPressed: () async {
+                final ok = await cubit.adjustNozzleMeter(
+                  nozzleId: nozzle.id,
+                  meter: meter.text,
+                  reason: reason.text,
+                );
+                if (!dialogContext.mounted) {
+                  return;
+                }
+                if (ok) {
+                  Navigator.pop(dialogContext);
+                } else if (cubit.state.error != null) {
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(SnackBar(content: Text(cubit.state.error!)));
+                }
+              },
+              child: const Text('حفظ'),
+            ),
+          ],
         ),
       );
     },

@@ -417,7 +417,7 @@ class _UsersTabState extends State<_UsersTab> {
                   ),
                   DropdownMenuItem(
                     value: 'operator',
-                    child: Text('مشغل الوردية'),
+                    child: Text('عامل المضخة'),
                   ),
                 ],
                 onChanged: (value) {
@@ -617,7 +617,7 @@ class _UsersTabState extends State<_UsersTab> {
                           items: const [
                             DropdownMenuItem(
                               value: 'operator',
-                              child: Text('مشغل الوردية'),
+                              child: Text('عامل المضخة'),
                             ),
                             DropdownMenuItem(
                               value: 'station_manager',
@@ -691,7 +691,7 @@ class _AccountTab extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         const Text(
-          'النظام يقتصر على دورين ثابتين: مدير المحطة ومشغل الوردية.',
+          'النظام يقتصر على دورين ثابتين: مدير المحطة وعامل المضخة.',
           style: TextStyle(color: AppColors.onSurfaceVariant),
         ),
         if (user != null) ...[
@@ -700,7 +700,7 @@ class _AccountTab extends StatelessWidget {
             user.fullName,
             style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
           ),
-          Text(user.roleCode == 'operator' ? 'مشغل الوردية' : 'مدير المحطة'),
+          Text(user.roleCode == 'operator' ? 'عامل المضخة' : 'مدير المحطة'),
         ],
         const SizedBox(height: 24),
         Align(

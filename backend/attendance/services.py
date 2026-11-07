@@ -10,8 +10,7 @@ from assets.models import Nozzle, Pump, Tank
 from attendance.models import Attendance, ShiftAssignment, ShiftSession
 from shifts.models import ShiftDuty, ShiftReading
 from shifts.reconciliation import format_liters, format_money, q_liters, variance_label
-from core.deps import permission_codes
-from enums import PermissionCode
+from enums import PermissionCode, permissions_for
 from errors import AppError
 from stations.models import FuelProduct, ShiftTemplate, Station
 from stations.windows import expand_window
@@ -772,7 +771,7 @@ def _supervisor(session: Session, actor: User, supervisor_id: str | None) -> uui
     if not supervisor_id:
         return None
     supervisor = _employee(session, actor, supervisor_id)
-    if PermissionCode.SHIFTS_APPROVE not in permission_codes(session, supervisor.role_id):
+    if PermissionCode.SHIFTS_APPROVE not in permissions_for(supervisor.role):
         raise AppError("VALIDATION_ERROR", "المشرف يجب أن يملك صلاحية اعتماد الورديات.", 422)
     return supervisor.id
 

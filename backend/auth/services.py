@@ -4,7 +4,6 @@ from sqlmodel import Session, select
 
 from auth.schemas import TokenResponse, UserPublic
 from core.cache import session_cache
-from core.deps import permission_codes
 from core.security import (
     create_access_token,
     hash_password,
@@ -13,10 +12,11 @@ from core.security import (
     refresh_expiry,
     verify_password,
 )
+from enums import ROLE_NAMES, permissions_for
 from errors import AppError
 from stations.models import Station
 from users.audit import write_audit
-from users.models import RefreshToken, Role, User
+from users.models import RefreshToken, User
 from utils import as_utc, utcnow
 
 _INVALID = "اسم المستخدم أو كلمة المرور غير صحيحة"
@@ -24,8 +24,7 @@ _INVALID = "اسم المستخدم أو كلمة المرور غير صحيحة
 
 def to_public(session: Session, user: User) -> UserPublic:
     station = session.get(Station, user.station_id)
-    role = session.get(Role, user.role_id)
-    if station is None or role is None:
+    if station is None or user.role not in ROLE_NAMES:
         raise AppError("ACCOUNT_INVALID", "تعذر تحميل بيانات الحساب.", 500)
     return UserPublic(
         id=str(user.id),
@@ -37,9 +36,9 @@ def to_public(session: Session, user: User) -> UserPublic:
         username=user.username,
         email=user.email,
         job_title=user.job_title,
-        role_code=role.code,
-        role_name_ar=role.name_ar,
-        permissions=permission_codes(session, user.role_id),
+        role_code=user.role,
+        role_name_ar=ROLE_NAMES[user.role],
+        permissions=permissions_for(user.role),
         is_maintenance=user.is_maintenance,
         is_active=user.is_active,
         photo_url=user.photo_url,
@@ -48,19 +47,18 @@ def to_public(session: Session, user: User) -> UserPublic:
 
 
 def _issue(session: Session, user: User, remember_me: bool) -> TokenResponse:
-    role = session.get(Role, user.role_id)
-    if role is None:
+    if user.role not in ROLE_NAMES:
         raise AppError("ACCOUNT_INVALID", "تعذر تحميل بيانات الحساب.", 500)
     access, expires_in, jti = create_access_token(
         user_id=user.id,
         station_id=user.station_id,
-        role_code=role.code,
+        role_code=user.role,
     )
     session_cache.store(
         jti=jti,
         user_id=str(user.id),
-        role_code=role.code,
-        permissions=permission_codes(session, user.role_id),
+        role_code=user.role,
+        permissions=permissions_for(user.role),
         ttl_seconds=expires_in,
     )
     raw_refresh = new_refresh_token()

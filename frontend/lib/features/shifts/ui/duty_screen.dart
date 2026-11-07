@@ -14,6 +14,7 @@ import 'package:frontend/core/widgets/app_dialog.dart';
 import 'package:frontend/core/widgets/pagination_bar.dart';
 import 'package:frontend/features/shifts/logic/duty_format.dart';
 import 'package:frontend/features/shifts/logic/reconcile.dart';
+import 'package:frontend/features/shifts/ui/meter_edit_dialog.dart';
 
 class DutyView extends StatelessWidget {
   const DutyView({super.key, this.onShowHistory, this.photo, this.photoUrl});
@@ -694,6 +695,8 @@ Future<void> _showOpenShiftPicker(BuildContext context, DutyState state) async {
   final cubit = context.read<DutyCubit>();
   String? templateId;
   final selectedNozzles = <String>{};
+  final meters = {for (final nozzle in state.nozzles) nozzle.id: TextEditingController(text: nozzle.currentMeter)};
+  final meterReason = TextEditingController();
 
   await showDialog<void>(
     context: context,
@@ -805,10 +808,20 @@ Future<void> _showOpenShiftPicker(BuildContext context, DutyState state) async {
                                             contentPadding: EdgeInsets.zero,
                                             value: selectedNozzles.contains(nozzle.id),
                                             title: Text('مسدس ${nozzle.code}${nozzle.label.isEmpty ? '' : ' — ${nozzle.label}'}'),
-                                            subtitle: Text(
-                                              nozzle.selectable
-                                                  ? '${nozzle.productName.isEmpty ? 'وقود' : nozzle.productName} — آخر إغلاق ${nozzle.currentMeter}${nozzle.unitPrice == null ? '' : ' • ${nozzle.unitPrice} د.ل/ل'}'
-                                                  : (nozzle.blockReason ?? 'غير متاح'),
+                                            subtitle: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  nozzle.selectable
+                                                      ? '${nozzle.productName.isEmpty ? 'وقود' : nozzle.productName} — آخر إغلاق ${nozzle.currentMeter}${nozzle.unitPrice == null ? '' : ' • ${nozzle.unitPrice} د.ل/ل'}'
+                                                      : (nozzle.blockReason ?? 'غير متاح'),
+                                                ),
+                                                if (nozzle.selectable && selectedNozzles.contains(nozzle.id))
+                                                  TextField(
+                                                    controller: meters[nozzle.id],
+                                                    decoration: const InputDecoration(labelText: 'قراءة العداد عند الفتح', isDense: true),
+                                                  ),
+                                              ],
                                             ),
                                             onChanged: nozzle.selectable
                                                 ? (checked) {
@@ -832,6 +845,13 @@ Future<void> _showOpenShiftPicker(BuildContext context, DutyState state) async {
                       ),
                     ),
                     const SizedBox(height: 12),
+                    TextField(
+                      controller: meterReason,
+                      decoration: const InputDecoration(
+                        labelText: 'سبب تعديل العداد (إذا اختلف عن آخر إغلاق)',
+                      ),
+                    ),
+                    const SizedBox(height: 12),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
@@ -841,11 +861,25 @@ Future<void> _showOpenShiftPicker(BuildContext context, DutyState state) async {
                           onPressed: shift == null || selectedNozzles.isEmpty
                               ? null
                               : () async {
-                                  final chosen = state.nozzles.where((item) => item.selectable && selectedNozzles.contains(item.id)).toList();
+                                  final chosen = state.nozzles
+                                      .where((item) => item.selectable && selectedNozzles.contains(item.id))
+                                      .map((item) => item.copyWith(currentMeter: meters[item.id]?.text.trim()))
+                                      .toList();
+                                  final changed = chosen.any((item) {
+                                    final original = state.nozzles.where((nozzle) => nozzle.id == item.id).firstOrNull;
+                                    return original != null && item.currentMeter != original.currentMeter;
+                                  });
+                                  if (changed && meterReason.text.trim().isEmpty) {
+                                    ScaffoldMessenger.of(dialogContext).showSnackBar(
+                                      const SnackBar(content: Text('اكتب سبب تعديل العداد.')),
+                                    );
+                                    return;
+                                  }
                                   final ok = await cubit.openClaim(
                                     sessionId: shift.sessionId,
                                     templateId: shift.templateId,
                                     nozzles: chosen,
+                                    meterReason: changed ? meterReason.text : null,
                                   );
                                   if (ok && dialogContext.mounted) {
                                     Navigator.pop(dialogContext);
@@ -864,6 +898,10 @@ Future<void> _showOpenShiftPicker(BuildContext context, DutyState state) async {
       );
     },
   );
+  meterReason.dispose();
+  for (final controller in meters.values) {
+    controller.dispose();
+  }
 }
 
 class _OpeningCard extends StatelessWidget {
@@ -902,6 +940,39 @@ class _OpeningCard extends StatelessWidget {
                   Expanded(child: Text('${line.pumpCode} (${line.productName})')),
                   Text(line.openingMeter, style: const TextStyle(fontWeight: FontWeight.w700)),
                 ],
+              ),
+            ),
+          if (duty.meterAdjusted)
+            const Padding(
+              padding: EdgeInsets.only(bottom: 8),
+              child: Text(
+                'تم تعديل عداد المسدس. يظهر التعديل في السجل وعند اعتماد المدير.',
+                style: TextStyle(color: Color(0xFFB45309), fontWeight: FontWeight.w700),
+              ),
+            ),
+          if (duty.canClose)
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: () async {
+                  final request = await showMeterEditDialog(context, lines: duty.lines);
+                  if (request == null || !context.mounted) {
+                    return;
+                  }
+                  final ok = await context.read<DutyCubit>().adjustMeters(
+                    dutyId: duty.id,
+                    reason: request.reason,
+                    lines: request.lines,
+                  );
+                  if (!ok && context.mounted) {
+                    final message = context.read<DutyCubit>().state.error;
+                    if (message != null) {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+                    }
+                  }
+                },
+                icon: const Icon(Icons.speed),
+                label: const Text('تعديل عداد المسدس'),
               ),
             ),
           const Text('تم بدء المناوبة بنجاح والمضخات متصلة بالنظام.', style: TextStyle(color: AppColors.success, fontSize: 12)),
@@ -1446,8 +1517,8 @@ class _HistorySection extends StatelessWidget {
                         DataCell(
                           cell(
                             row.templateName == null || row.templateName!.isEmpty
-                                ? '${row.businessDate} (${row.statusLabel})'
-                                : '${row.businessDate} • ${row.templateName}\n${row.statusLabel}',
+                                ? '${row.businessDate} (${row.statusLabel}${row.meterAdjusted ? ' • عُدّل العداد' : ''})'
+                                : '${row.businessDate} • ${row.templateName}\n${row.statusLabel}${row.meterAdjusted ? '\nعُدّل العداد' : ''}',
                             max: 140,
                           ),
                         ),
@@ -1647,6 +1718,8 @@ class _HistoryCard extends StatelessWidget {
           Text('ساعات الدوام: ${dutyWorkHoursLabel(row)}', style: const TextStyle(fontSize: 12)),
           Text('اللترات ${row.liters ?? '—'} • ${row.expectedCash ?? '—'} د.ل'),
           Text('المشرف: ${row.approvedByName ?? '—'}', style: const TextStyle(fontSize: 12, color: AppColors.onSurfaceVariant)),
+          if (row.meterAdjusted)
+            const Text('تم تعديل عداد المسدس في هذه الوردية', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFFB45309))),
         ],
       ),
     );

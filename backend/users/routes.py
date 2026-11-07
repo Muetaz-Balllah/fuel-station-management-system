@@ -6,8 +6,8 @@ from sqlmodel import Session
 from core.deps import require_permission
 from db import get_session
 from users.models import User
-from users.schemas import PermissionReplace, RolePublic, StaffPublic, UserCreate, UserUpdate
-from users.services import create_staff, list_roles, list_staff, replace_permissions, save_photo, update_staff
+from users.schemas import StaffPublic, UserCreate, UserUpdate
+from users.services import create_staff, list_roles, list_staff, save_photo, update_staff
 
 router = APIRouter(tags=["users"])
 
@@ -54,21 +54,10 @@ def patch_user(
     return update_staff(session, user, user_id, payload)
 
 
-@router.get("/roles")
+@router.get("/roles", response_model=dict)
 def read_roles(
     user: User = Depends(require_permission("users.manage")),
-    session: Session = Depends(get_session),
 ) -> dict:
     del user
-    items = list_roles(session)
-    return {"items": items, "total": len(items)}
-
-
-@router.put("/roles/{role_id}/permissions", response_model=RolePublic)
-def put_permissions(
-    role_id: uuid.UUID,
-    payload: PermissionReplace,
-    user: User = Depends(require_permission("users.manage")),
-    session: Session = Depends(get_session),
-) -> RolePublic:
-    return replace_permissions(session, user, role_id, payload)
+    items = list_roles()
+    return {"items": [item.model_dump() for item in items], "total": len(items)}

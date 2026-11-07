@@ -243,6 +243,10 @@ class AttendanceCubit extends Cubit<AttendanceState> {
 
   Future<String?> rejectDuty(String dutyId, String reason) => _dutyAction(() => _shifts.reject(dutyId, reason));
 
+  Future<String?> adjustDutyMeters(String dutyId, String reason, List<Map<String, String>> lines) {
+    return _dutyAction(() => _shifts.adjustMeters(dutyId: dutyId, reason: reason, lines: lines));
+  }
+
   Future<bool> register({
     required String userId,
     required List<String> nozzleIds,

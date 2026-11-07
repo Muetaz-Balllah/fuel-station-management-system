@@ -21,6 +21,20 @@ class AssignedNozzle {
   final bool selectable;
   final String? blockReason;
 
+  AssignedNozzle copyWith({String? currentMeter}) {
+    return AssignedNozzle(
+      id: id,
+      code: code,
+      label: label,
+      pumpCode: pumpCode,
+      productName: productName,
+      currentMeter: currentMeter ?? this.currentMeter,
+      unitPrice: unitPrice,
+      selectable: selectable,
+      blockReason: blockReason,
+    );
+  }
+
   factory AssignedNozzle.fromJson(Map<String, dynamic> json) {
     return AssignedNozzle(
       id: json['nozzle_id'] as String,
@@ -48,6 +62,10 @@ class DutyLine {
     required this.unitPrice,
     required this.liters,
     required this.lineAmount,
+    this.meterAdjusted = false,
+    this.previousMeter,
+    this.meterReason,
+    this.adjustedByName,
   });
 
   final String nozzleId;
@@ -60,6 +78,10 @@ class DutyLine {
   final String unitPrice;
   final String? liters;
   final String? lineAmount;
+  final bool meterAdjusted;
+  final String? previousMeter;
+  final String? meterReason;
+  final String? adjustedByName;
 
   factory DutyLine.fromJson(Map<String, dynamic> json) {
     return DutyLine(
@@ -73,6 +95,10 @@ class DutyLine {
       unitPrice: json['unit_price'] as String? ?? '0.000',
       liters: json['liters'] as String?,
       lineAmount: json['line_amount'] as String?,
+      meterAdjusted: json['meter_adjusted'] as bool? ?? false,
+      previousMeter: json['previous_meter'] as String?,
+      meterReason: json['meter_reason'] as String?,
+      adjustedByName: json['adjusted_by_name'] as String?,
     );
   }
 }
@@ -102,6 +128,7 @@ class DutyRecord {
     required this.rejectReason,
     required this.businessDate,
     required this.lines,
+    this.meterAdjustments = const [],
     this.rosteredName,
     this.takenOver = false,
   });
@@ -129,13 +156,17 @@ class DutyRecord {
   final String? rejectReason;
   final String businessDate;
   final List<DutyLine> lines;
+  final List<MeterAdjustment> meterAdjustments;
   final String? rosteredName;
   final bool takenOver;
 
   bool get canClose => status == 'open' || status == 'rejected';
 
+  bool get meterAdjusted => meterAdjustments.isNotEmpty || lines.any((line) => line.meterAdjusted);
+
   factory DutyRecord.fromJson(Map<String, dynamic> json) {
     final raw = json['lines'] as List<dynamic>? ?? const [];
+    final adjustments = json['meter_adjustments'] as List<dynamic>? ?? const [];
     return DutyRecord(
       id: json['id'] as String,
       sessionId: json['session_id'] as String? ?? '',
@@ -160,8 +191,38 @@ class DutyRecord {
       rejectReason: json['reject_reason'] as String?,
       businessDate: json['business_date'] as String? ?? '',
       lines: raw.map((item) => DutyLine.fromJson(item as Map<String, dynamic>)).toList(),
+      meterAdjustments: adjustments.map((item) => MeterAdjustment.fromJson(item as Map<String, dynamic>)).toList(),
       rosteredName: json['rostered_name'] as String?,
       takenOver: json['taken_over'] as bool? ?? false,
+    );
+  }
+}
+
+class MeterAdjustment {
+  const MeterAdjustment({
+    required this.nozzleCode,
+    required this.previousMeter,
+    required this.newMeter,
+    required this.reason,
+    required this.actorName,
+    required this.createdAtLabel,
+  });
+
+  final String nozzleCode;
+  final String previousMeter;
+  final String newMeter;
+  final String reason;
+  final String actorName;
+  final String createdAtLabel;
+
+  factory MeterAdjustment.fromJson(Map<String, dynamic> json) {
+    return MeterAdjustment(
+      nozzleCode: json['nozzle_code'] as String? ?? '',
+      previousMeter: json['previous_meter'] as String? ?? '',
+      newMeter: json['new_meter'] as String? ?? '',
+      reason: json['reason'] as String? ?? '',
+      actorName: json['actor_name'] as String? ?? '',
+      createdAtLabel: json['created_at_label'] as String? ?? '',
     );
   }
 }

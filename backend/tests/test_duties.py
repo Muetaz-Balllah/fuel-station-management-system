@@ -263,7 +263,7 @@ def test_absent_and_foreign_nozzle_cannot_open(client):
     assert foreign.json()["status"] == "open"
 
 
-def test_meter_mismatch_needs_override_and_a_reason(client):
+def test_meter_edit_is_allowed_for_operator_and_manager_and_stays_visible(client):
     token, manager_id = _manager(client)
     yard = _yard(client, token, "PUMP-METER", ["5000.000"])
     operator_id = _user(client, token, "فني العداد", "duty.meter")
@@ -271,7 +271,7 @@ def test_meter_mismatch_needs_override_and_a_reason(client):
     nozzle = yard["nozzles"][0]
     _assign(client, token, shift["id"], operator_id, [nozzle["id"]])
     operator = _login(client, "duty.meter")
-    wrong = client.post(
+    missing = client.post(
         "/api/v1/duties/open",
         headers=auth_header(operator),
         json={
@@ -279,22 +279,28 @@ def test_meter_mismatch_needs_override_and_a_reason(client):
             "nozzles": [{"nozzle_id": nozzle["id"], "opening_meter": "5001.000"}],
         },
     )
-    assert wrong.status_code == 409
-    assert wrong.json()["code"] == "METER_MISMATCH"
+    assert missing.status_code == 422
+    assert missing.json()["code"] == "REASON_REQUIRED"
+    opened = client.post(
+        "/api/v1/duties/open",
+        headers=auth_header(operator),
+        json={
+            "session_id": shift["id"],
+            "reason": "العداد على المضخة يختلف عن آخر إغلاق",
+            "nozzles": [{"nozzle_id": nozzle["id"], "opening_meter": "5001.000"}],
+        },
+    )
+    assert opened.status_code == 201, opened.text
+    line = opened.json()["lines"][0]
+    assert line["opening_meter"] == "5001.000"
+    assert line["meter_adjusted"] is True
+    assert line["previous_meter"] == "5000.000"
+    assert line["meter_reason"] == "العداد على المضخة يختلف عن آخر إغلاق"
+    assert opened.json()["meter_adjustments"][0]["actor_name"] == "فني العداد"
     manager_yard = _yard(client, token, "PUMP-OVR", ["8000.000"])
     manager_shift = _session(client, token, "2026-11-06")
     manager_nozzle = manager_yard["nozzles"][0]
     _assign(client, token, manager_shift["id"], manager_id, [manager_nozzle["id"]])
-    missing_reason = client.post(
-        "/api/v1/duties/open",
-        headers=auth_header(token),
-        json={
-            "session_id": manager_shift["id"],
-            "nozzles": [{"nozzle_id": manager_nozzle["id"], "opening_meter": "8005.000"}],
-        },
-    )
-    assert missing_reason.status_code == 422
-    assert missing_reason.json()["code"] == "REASON_REQUIRED"
     accepted = client.post(
         "/api/v1/duties/open",
         headers=auth_header(token),
@@ -305,7 +311,21 @@ def test_meter_mismatch_needs_override_and_a_reason(client):
         },
     )
     assert accepted.status_code == 201, accepted.text
-    assert accepted.json()["lines"][0]["opening_meter"] == "8005.000"
+    duty_id = accepted.json()["id"]
+    closed = client.post(
+        f"/api/v1/duties/{duty_id}/close",
+        headers=auth_header(token),
+        json={
+            "cash_handed": "1.50",
+            "lines": [{"nozzle_id": manager_nozzle["id"], "closing_meter": "8015.000"}],
+        },
+    )
+    assert closed.status_code == 200, closed.text
+    pending = client.get(f"/api/v1/duties/{duty_id}", headers=auth_header(token)).json()
+    assert pending["status"] == "pending_approval"
+    assert pending["lines"][0]["meter_adjusted"] is True
+    assert pending["lines"][0]["previous_meter"] == "8000.000"
+    assert pending["expected_cash"] == "1.50"
 
 
 def test_price_change_after_open_does_not_touch_the_duty(client):

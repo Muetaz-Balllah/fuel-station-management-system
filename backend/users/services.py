@@ -5,13 +5,12 @@ from sqlmodel import Session, select
 
 from auth.services import _revoke_all
 from core.cache import session_cache
-from core.deps import permission_codes
 from core.security import hash_password
-from enums import PermissionCode, RoleCode
+from enums import ROLE_NAMES, RoleCode, permissions_for
 from errors import AppError
 from users.audit import write_audit
-from users.models import Permission, Role, RolePermission, User
-from users.schemas import PermissionReplace, RolePublic, StaffPublic, UserCreate, UserUpdate
+from users.models import User
+from users.schemas import RolePublic, StaffPublic, UserCreate, UserUpdate
 from utils import utcnow
 
 _ROLE_ORDER = [RoleCode.STATION_MANAGER, RoleCode.OPERATOR]
@@ -32,10 +31,9 @@ def list_staff(
     if role == "maintenance":
         statement = statement.where(User.is_maintenance == True)  # noqa: E712
     elif role and role != "all":
-        role_row = session.exec(select(Role).where(Role.code == role)).first()
-        if role_row is None:
+        if role not in ROLE_NAMES:
             return [], 0
-        statement = statement.where(User.role_id == role_row.id)
+        statement = statement.where(User.role == role)
     rows = session.exec(statement.order_by(User.full_name)).all()
     needle = (search or "").strip().casefold()
     if needle:
@@ -57,12 +55,11 @@ def create_staff(session: Session, actor: User, payload: UserCreate) -> StaffPub
     if not full_name or not username:
         raise AppError("VALIDATION_ERROR", "الاسم واسم المستخدم مطلوبان.", 422)
     _check_password(payload.password)
-    role = _role_by_code(session, payload.role_code)
-    _guard_admin_assignment(session, actor, role)
+    role = _role_code(payload.role_code)
     email = _clean_email(payload.email)
     user = User(
         station_id=actor.station_id,
-        role_id=role.id,
+        role=role,
         employee_code=_next_employee_code(session, actor.station_id),
         full_name=full_name,
         username=username,
@@ -84,7 +81,7 @@ def create_staff(session: Session, actor: User, payload: UserCreate) -> StaffPub
         action="user_created",
         entity="user",
         entity_id=str(user.id),
-        detail={"username": username, "role_code": role.code},
+        detail={"username": username, "role_code": role},
     )
     session.commit()
     session.refresh(user)
@@ -114,10 +111,9 @@ def update_staff(session: Session, actor: User, user_id: uuid.UUID, payload: Use
     if "is_maintenance" in data and data["is_maintenance"] is not None:
         target.is_maintenance = data["is_maintenance"]
     if "role_code" in data and data["role_code"] is not None:
-        role = _role_by_code(session, data["role_code"])
-        _guard_admin_assignment(session, actor, role)
-        if target.role_id != role.id:
-            target.role_id = role.id
+        role = _role_code(data["role_code"])
+        if target.role != role:
+            target.role = role
             revoke = True
     if "is_active" in data and data["is_active"] is not None:
         if data["is_active"] is False and target.id == actor.id:
@@ -153,71 +149,16 @@ def update_staff(session: Session, actor: User, user_id: uuid.UUID, payload: Use
     return _staff(session, target)
 
 
-def list_roles(session: Session) -> list[RolePublic]:
-    rows = session.exec(select(Role)).all()
-    rows = [row for row in rows if row.code != RoleCode.SYSTEM_ADMIN]
-    order = {code: index for index, code in enumerate(_ROLE_ORDER)}
-    rows.sort(key=lambda row: order.get(row.code, 99))
+def list_roles() -> list[RolePublic]:
     return [
         RolePublic(
-            id=str(row.id),
-            code=row.code,
-            name_ar=row.name_ar,
-            permissions=permission_codes(session, row.id),
+            id=code,
+            code=code,
+            name_ar=ROLE_NAMES[code],
+            permissions=permissions_for(code),
         )
-        for row in rows
+        for code in _ROLE_ORDER
     ]
-
-
-def replace_permissions(
-    session: Session,
-    actor: User,
-    role_id: uuid.UUID,
-    payload: PermissionReplace,
-) -> RolePublic:
-    role = session.get(Role, role_id)
-    if role is None:
-        raise AppError("ROLE_NOT_FOUND", "تعذر العثور على الدور.", 404)
-    unknown = [code for code in payload.permissions if code not in PermissionCode.ALL]
-    if unknown:
-        raise AppError("VALIDATION_ERROR", "صلاحية غير معروفة.", 422)
-    if role.code == RoleCode.STATION_MANAGER and PermissionCode.USERS_MANAGE not in payload.permissions:
-        raise AppError(
-            "VALIDATION_ERROR",
-            "لا يمكن سحب صلاحية إدارة المستخدمين من مدير المحطة.",
-            422,
-        )
-    if role.code == RoleCode.SYSTEM_ADMIN:
-        raise AppError("ROLE_NOT_FOUND", "هذا الدور غير مستخدم في النظام.", 404)
-    existing = session.exec(
-        select(RolePermission).where(RolePermission.role_id == role.id)
-    ).all()
-    for row in existing:
-        session.delete(row)
-    session.flush()
-    for code in dict.fromkeys(payload.permissions):
-        permission = session.exec(select(Permission).where(Permission.code == code)).first()
-        if permission is None:
-            raise AppError("VALIDATION_ERROR", "صلاحية غير معروفة.", 422)
-        session.add(RolePermission(role_id=role.id, permission_id=permission.id))
-    holders = session.exec(select(User).where(User.role_id == role.id)).all()
-    write_audit(
-        session,
-        actor_id=actor.id,
-        action="role_permissions_replaced",
-        entity="role",
-        entity_id=str(role.id),
-        detail={"permissions": payload.permissions},
-    )
-    for holder in holders:
-        session_cache.revoke_user(str(holder.id))
-    session.commit()
-    return RolePublic(
-        id=str(role.id),
-        code=role.code,
-        name_ar=role.name_ar,
-        permissions=permission_codes(session, role.id),
-    )
 
 
 def save_photo(session: Session, actor: User, target_id: uuid.UUID, upload) -> StaffPublic:
@@ -227,8 +168,7 @@ def save_photo(session: Session, actor: User, target_id: uuid.UUID, upload) -> S
     if target is None or target.station_id != actor.station_id:
         raise AppError("USER_NOT_FOUND", "تعذر العثور على الموظف.", 404)
     if target.id != actor.id:
-        actor_role = session.get(Role, actor.role_id)
-        if actor_role is None or PermissionCode.USERS_MANAGE not in permission_codes(session, actor.role_id):
+        if "users.manage" not in permissions_for(actor.role):
             raise AppError("FORBIDDEN", "ليست لديك صلاحية لتعديل صورة هذا الحساب.", 403)
     target.photo_url = store_image(upload, f"user-{target.id}")
     target.updated_at = utcnow()
@@ -247,7 +187,6 @@ def save_photo(session: Session, actor: User, target_id: uuid.UUID, upload) -> S
 
 
 def _staff(session: Session, user: User) -> StaffPublic:
-    role = session.get(Role, user.role_id)
     return StaffPublic(
         id=str(user.id),
         employee_code=user.employee_code,
@@ -255,8 +194,8 @@ def _staff(session: Session, user: User) -> StaffPublic:
         username=user.username,
         email=user.email,
         job_title=user.job_title,
-        role_code=role.code if role else "",
-        role_name_ar=role.name_ar if role else "",
+        role_code=user.role,
+        role_name_ar=ROLE_NAMES.get(user.role, user.role),
         is_active=user.is_active,
         is_maintenance=user.is_maintenance,
         photo_url=user.photo_url,
@@ -264,17 +203,11 @@ def _staff(session: Session, user: User) -> StaffPublic:
     )
 
 
-def _role_by_code(session: Session, code: str) -> Role:
-    role = session.exec(select(Role).where(Role.code == code.strip())).first()
-    if role is None:
+def _role_code(code: str) -> str:
+    cleaned = code.strip()
+    if cleaned not in ROLE_NAMES:
         raise AppError("VALIDATION_ERROR", "الدور المحدد غير موجود.", 422)
-    return role
-
-
-def _guard_admin_assignment(session: Session, actor: User, role: Role) -> None:
-    del session, actor
-    if role.code == RoleCode.SYSTEM_ADMIN:
-        raise AppError("VALIDATION_ERROR", "هذا الدور غير مستخدم في النظام.", 422)
+    return cleaned
 
 
 def _check_password(password: str) -> None:

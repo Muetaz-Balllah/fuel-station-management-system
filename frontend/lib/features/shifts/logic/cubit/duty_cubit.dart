@@ -134,22 +134,45 @@ class DutyCubit extends Cubit<DutyState> {
     String? sessionId,
     String? templateId,
     required List<AssignedNozzle> nozzles,
+    String? meterReason,
   }) {
     if (nozzles.isEmpty || ((sessionId == null || sessionId.isEmpty) && (templateId == null || templateId.isEmpty))) {
       emit(state.copyWith(error: 'اختر الوردية والمضخات التي ستتسلمها.'));
       return Future.value(false);
     }
-    return _open(sessionId: sessionId, templateId: templateId, nozzles: nozzles);
+    return _open(sessionId: sessionId, templateId: templateId, nozzles: nozzles, meterReason: meterReason);
+  }
+
+  Future<bool> adjustMeters({
+    required String dutyId,
+    required String reason,
+    required List<Map<String, String>> lines,
+  }) async {
+    emit(state.copyWith(busy: true, clearError: true));
+    try {
+      await _repository.adjustMeters(dutyId: dutyId, reason: reason, lines: lines);
+      await load();
+      return true;
+    } on ApiException catch (error) {
+      emit(state.copyWith(busy: false, error: error.message));
+      return false;
+    }
   }
 
   Future<bool> _open({
     String? sessionId,
     String? templateId,
     required List<AssignedNozzle> nozzles,
+    String? meterReason,
   }) async {
     emit(state.copyWith(busy: true, clearError: true));
     try {
-      await _repository.openDuty(sessionId: sessionId, templateId: templateId, nozzles: nozzles);
+      await _repository.openDuty(
+        sessionId: sessionId,
+        templateId: templateId,
+        nozzles: nozzles,
+        meterReason: meterReason,
+      );
       await load();
       return true;
     } on ApiException catch (error) {

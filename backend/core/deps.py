@@ -2,13 +2,13 @@ import uuid
 
 from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from sqlmodel import Session, select
+from sqlmodel import Session
 
 from core.cache import session_cache
 from core.security import decode_access_token
 from db import get_session
 from errors import AppError
-from users.models import Permission, RolePermission, User
+from users.models import User
 
 bearer = HTTPBearer(auto_error=False)
 
@@ -48,15 +48,6 @@ def get_current_user(
     request.state.permissions = tuple(cached.get("permissions") or [])
     request.state.role_code = str(cached.get("role_code") or "")
     return user
-
-
-def permission_codes(session: Session, role_id: uuid.UUID) -> list[str]:
-    rows = session.exec(
-        select(Permission.code)
-        .join(RolePermission, RolePermission.permission_id == Permission.id)
-        .where(RolePermission.role_id == role_id)
-    ).all()
-    return sorted(rows)
 
 
 def require_permission(code: str):

@@ -5,6 +5,7 @@ from sqlmodel import Session
 from core.deps import require_permission
 from db import get_session
 from shifts.services import (
+    adjust_duty_meters,
     approve_duty,
     close_duty,
     duties_for_business_date,
@@ -47,6 +48,16 @@ class CloseDuty(BaseModel):
 
 class RejectDuty(BaseModel):
     reason: str
+
+
+class MeterLine(BaseModel):
+    nozzle_id: str
+    opening_meter: str
+
+
+class AdjustMeters(BaseModel):
+    reason: str
+    lines: list[MeterLine]
 
 
 def _permissions(request: Request) -> tuple[str, ...]:
@@ -92,6 +103,17 @@ def read_duty(
     session: Session = Depends(get_session),
 ) -> dict:
     return get_duty(session, user, duty_id, _permissions(request))
+
+
+@router.post("/duties/{duty_id}/meters")
+def post_meters(
+    duty_id: str,
+    payload: AdjustMeters,
+    request: Request,
+    user: User = Depends(require_permission("shifts.operate")),
+    session: Session = Depends(get_session),
+) -> dict:
+    return adjust_duty_meters(session, user, duty_id, payload, _permissions(request))
 
 
 @router.post("/duties/{duty_id}/close")

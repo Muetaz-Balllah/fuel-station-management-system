@@ -7,29 +7,6 @@ from sqlmodel import Field, SQLModel
 from utils import utcnow
 
 
-class Role(SQLModel, table=True):
-    __tablename__ = "roles"
-
-    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    code: str = Field(index=True, unique=True, max_length=64)
-    name_ar: str = Field(max_length=100)
-    is_system: bool = True
-
-
-class Permission(SQLModel, table=True):
-    __tablename__ = "permissions"
-
-    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    code: str = Field(index=True, unique=True, max_length=64)
-
-
-class RolePermission(SQLModel, table=True):
-    __tablename__ = "role_permissions"
-
-    role_id: uuid.UUID = Field(foreign_key="roles.id", primary_key=True)
-    permission_id: uuid.UUID = Field(foreign_key="permissions.id", primary_key=True)
-
-
 class User(SQLModel, table=True):
     __tablename__ = "users"
     __table_args__ = (
@@ -41,7 +18,7 @@ class User(SQLModel, table=True):
 
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     station_id: uuid.UUID = Field(foreign_key="stations.id", index=True)
-    role_id: uuid.UUID = Field(foreign_key="roles.id", index=True)
+    role: str = Field(index=True, max_length=32)
     employee_code: str = Field(max_length=32)
     full_name: str = Field(max_length=200)
     username: str = Field(index=True, max_length=64)

@@ -1,7 +1,14 @@
 class RoleCode:
-    SYSTEM_ADMIN = "system_admin"
     STATION_MANAGER = "station_manager"
     OPERATOR = "operator"
+
+    ALL = (STATION_MANAGER, OPERATOR)
+
+
+ROLE_NAMES = {
+    RoleCode.STATION_MANAGER: "مدير المحطة",
+    RoleCode.OPERATOR: "عامل المضخة",
+}
 
 
 class PermissionCode:
@@ -36,3 +43,11 @@ class PermissionCode:
         METER_OVERRIDE,
         INVENTORY_ADJUST,
     ]
+
+
+def permissions_for(role: str) -> list[str]:
+    if role == RoleCode.STATION_MANAGER:
+        return list(PermissionCode.ALL)
+    if role == RoleCode.OPERATOR:
+        return [PermissionCode.SHIFTS_OPERATE]
+    return []

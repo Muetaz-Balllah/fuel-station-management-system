@@ -44,7 +44,3 @@ class RolePublic(BaseModel):
     code: str
     name_ar: str
     permissions: list[str]
-
-
-class PermissionReplace(BaseModel):
-    permissions: list[str]

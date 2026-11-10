@@ -955,7 +955,7 @@ class _OpeningCard extends StatelessWidget {
               alignment: Alignment.centerRight,
               child: TextButton.icon(
                 onPressed: () async {
-                  final request = await showMeterEditDialog(context, lines: duty.lines);
+                  final request = await showMeterEditDialog(context, lines: duty.lines, adjustments: duty.meterAdjustments);
                   if (request == null || !context.mounted) {
                     return;
                   }

@@ -206,9 +206,9 @@ def copy_database(source_url: str, target_url: str, *, replace: bool = False) ->
         target = _make_engine(target_url)
         try:
             SQLModel.metadata.create_all(target)
-            from schema_patch import apply_sqlite_patches
+            from schema_patch import apply_schema_updates
 
-            apply_sqlite_patches(target)
+            apply_schema_updates(target)
             ordered = list(SQLModel.metadata.sorted_tables)
             with target.connect() as probe:
                 existing_rows = sum(_count(probe, table) for table in ordered)

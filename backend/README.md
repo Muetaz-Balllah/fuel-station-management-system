@@ -24,7 +24,7 @@ DATABASE_URL=postgresql+psycopg://fuel:fuel@localhost:5432/fuel_station
 
 Development sign-in:
 
-- manager / Manager@12345 (station manager, including role permissions)
+- manager / Manager@12345 (station manager)
 - operator / Operator@12345
 
 The first launch also seeds four demo pumps (PUMP-01, PUMP-02, PUMP-D1, PUMP-D2) when the station has no tanks. Set `SEED_DEMO_ASSETS=false` to skip them.

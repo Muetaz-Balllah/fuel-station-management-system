@@ -10,6 +10,7 @@
 **/.mypy_cache
 **/.ruff_cache
 **/*.db
+!backend/data/hosted_snapshot.db
 **/.venv
 **/venv
 

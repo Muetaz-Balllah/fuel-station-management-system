@@ -156,10 +156,6 @@ def open_duty(session: Session, user: User, payload, permissions: tuple[str, ...
     session.flush()
     for nozzle, opening, official, price in prepared:
         inherited = None if opening != official else _unlinked_adjustment(session, nozzle.id, opening)
-        adjusted = opening != official or inherited is not None
-        previous = official if opening != official else (q_liters(inherited.previous_meter) if inherited else None)
-        note = reason if opening != official else (inherited.reason if inherited else None)
-        actor_id = user.id if opening != official else (inherited.actor_id if inherited else None)
         session.add(
             ShiftReading(
                 duty_id=duty.id,
@@ -167,10 +163,6 @@ def open_duty(session: Session, user: User, payload, permissions: tuple[str, ...
                 price_id=price.id,
                 opening_meter=opening,
                 unit_price=q_liters(price.price_per_liter),
-                meter_adjusted=adjusted,
-                previous_meter=previous,
-                meter_reason=note,
-                adjusted_by=actor_id,
             )
         )
         if opening != official:
@@ -185,13 +177,12 @@ def open_duty(session: Session, user: User, payload, permissions: tuple[str, ...
                     reason=reason,
                 )
             )
-        elif inherited is not None:
-            inherited.duty_id = duty.id
-            session.add(inherited)
-        if adjusted and opening != official:
             nozzle.current_meter = opening
             nozzle.updated_at = utcnow()
             session.add(nozzle)
+        elif inherited is not None:
+            inherited.duty_id = duty.id
+            session.add(inherited)
     if attendance.check_in_at is None:
         attendance.check_in_at = utcnow()
         attendance.updated_at = utcnow()
@@ -677,10 +668,6 @@ def _duty_public(session: Session, duty: ShiftDuty) -> dict:
                 "product_name": product.name_ar if product else "",
                 "opening_meter": format_liters(reading.opening_meter),
                 "closing_meter": format_liters(reading.closing_meter) if reading.closing_meter is not None else None,
-                "meter_adjusted": reading.meter_adjusted,
-                "previous_meter": format_liters(reading.previous_meter) if reading.previous_meter is not None else None,
-                "meter_reason": reading.meter_reason,
-                "adjusted_by_name": _person_name(session, reading.adjusted_by),
                 "liters": format_liters(reading.liters) if reading.liters is not None else None,
                 "unit_price": format_price(reading.unit_price),
                 "line_amount": format_money(reading.line_amount) if reading.line_amount is not None else None,
@@ -1275,12 +1262,7 @@ def adjust_duty_meters(session: Session, user: User, duty_id: str, payload, perm
         new_meter = _meter(item.opening_meter)
         if new_meter == q_liters(reading.opening_meter):
             continue
-        baseline = (
-            q_liters(reading.previous_meter)
-            if reading.meter_adjusted and reading.previous_meter is not None
-            else q_liters(reading.opening_meter)
-        )
-        _stamp_reading_meter(session, user, duty, reading, baseline, new_meter, reason)
+        _stamp_reading_meter(session, user, duty, reading, new_meter, reason)
         changed = True
     if not changed:
         raise AppError("VALIDATION_ERROR", "العداد لم يتغير.", 422)
@@ -1316,12 +1298,7 @@ def correct_nozzle_meter(session: Session, user: User, nozzle_id: uuid.UUID, met
             raise AppError("FORBIDDEN", "تعديل عداد هذه الوردية متاح لصاحبها أو لمدير المحطة.", 403)
         if new_meter == q_liters(reading.opening_meter):
             raise AppError("VALIDATION_ERROR", "العداد لم يتغير.", 422)
-        baseline = (
-            q_liters(reading.previous_meter)
-            if reading.meter_adjusted and reading.previous_meter is not None
-            else q_liters(reading.opening_meter)
-        )
-        _stamp_reading_meter(session, user, duty, reading, baseline, new_meter, note)
+        _stamp_reading_meter(session, user, duty, reading, new_meter, note)
         if duty.status in {"pending_approval", "rejected"}:
             _reprice_duty(session, duty)
         write_audit(
@@ -1374,16 +1351,11 @@ def _stamp_reading_meter(
     user: User,
     duty: ShiftDuty,
     reading: ShiftReading,
-    baseline: Decimal,
     new_meter: Decimal,
     reason: str,
 ) -> None:
     replaced = q_liters(reading.opening_meter)
     reading.opening_meter = new_meter
-    reading.meter_adjusted = new_meter != baseline
-    reading.previous_meter = baseline if reading.meter_adjusted else None
-    reading.meter_reason = reason if reading.meter_adjusted else None
-    reading.adjusted_by = user.id if reading.meter_adjusted else None
     session.add(reading)
     nozzle = session.get(Nozzle, reading.nozzle_id)
     if nozzle is not None:

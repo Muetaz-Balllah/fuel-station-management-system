@@ -62,10 +62,6 @@ class DutyLine {
     required this.unitPrice,
     required this.liters,
     required this.lineAmount,
-    this.meterAdjusted = false,
-    this.previousMeter,
-    this.meterReason,
-    this.adjustedByName,
   });
 
   final String nozzleId;
@@ -78,10 +74,6 @@ class DutyLine {
   final String unitPrice;
   final String? liters;
   final String? lineAmount;
-  final bool meterAdjusted;
-  final String? previousMeter;
-  final String? meterReason;
-  final String? adjustedByName;
 
   factory DutyLine.fromJson(Map<String, dynamic> json) {
     return DutyLine(
@@ -95,10 +87,6 @@ class DutyLine {
       unitPrice: json['unit_price'] as String? ?? '0.000',
       liters: json['liters'] as String?,
       lineAmount: json['line_amount'] as String?,
-      meterAdjusted: json['meter_adjusted'] as bool? ?? false,
-      previousMeter: json['previous_meter'] as String?,
-      meterReason: json['meter_reason'] as String?,
-      adjustedByName: json['adjusted_by_name'] as String?,
     );
   }
 }
@@ -162,7 +150,11 @@ class DutyRecord {
 
   bool get canClose => status == 'open' || status == 'rejected';
 
-  bool get meterAdjusted => meterAdjustments.isNotEmpty || lines.any((line) => line.meterAdjusted);
+  bool get meterAdjusted => meterAdjustments.isNotEmpty;
+
+  List<MeterAdjustment> adjustmentsFor(String nozzleId) {
+    return meterAdjustments.where((item) => item.nozzleId == nozzleId).toList();
+  }
 
   factory DutyRecord.fromJson(Map<String, dynamic> json) {
     final raw = json['lines'] as List<dynamic>? ?? const [];
@@ -200,6 +192,7 @@ class DutyRecord {
 
 class MeterAdjustment {
   const MeterAdjustment({
+    required this.nozzleId,
     required this.nozzleCode,
     required this.previousMeter,
     required this.newMeter,
@@ -208,6 +201,7 @@ class MeterAdjustment {
     required this.createdAtLabel,
   });
 
+  final String nozzleId;
   final String nozzleCode;
   final String previousMeter;
   final String newMeter;
@@ -217,6 +211,7 @@ class MeterAdjustment {
 
   factory MeterAdjustment.fromJson(Map<String, dynamic> json) {
     return MeterAdjustment(
+      nozzleId: json['nozzle_id'] as String? ?? '',
       nozzleCode: json['nozzle_code'] as String? ?? '',
       previousMeter: json['previous_meter'] as String? ?? '',
       newMeter: json['new_meter'] as String? ?? '',

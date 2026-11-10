@@ -39,9 +39,12 @@ async def lifespan(app: FastAPI):
         Path("uploads").mkdir(parents=True, exist_ok=True)
     if settings.auto_create_tables:
         SQLModel.metadata.create_all(engine)
-        from schema_patch import apply_sqlite_patches
+        from schema_patch import apply_schema_updates
 
-        apply_sqlite_patches(engine)
+        apply_schema_updates(engine)
+        from hosted_import import import_hosted_snapshot_once
+
+        import_hosted_snapshot_once(engine)
     if settings.seed_on_startup:
         from users.bootstrap import seed
 

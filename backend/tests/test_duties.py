@@ -293,10 +293,12 @@ def test_meter_edit_is_allowed_for_operator_and_manager_and_stays_visible(client
     assert opened.status_code == 201, opened.text
     line = opened.json()["lines"][0]
     assert line["opening_meter"] == "5001.000"
-    assert line["meter_adjusted"] is True
-    assert line["previous_meter"] == "5000.000"
-    assert line["meter_reason"] == "العداد على المضخة يختلف عن آخر إغلاق"
-    assert opened.json()["meter_adjustments"][0]["actor_name"] == "فني العداد"
+    assert "meter_adjusted" not in line
+    note = opened.json()["meter_adjustments"][0]
+    assert note["previous_meter"] == "5000.000"
+    assert note["new_meter"] == "5001.000"
+    assert note["reason"] == "العداد على المضخة يختلف عن آخر إغلاق"
+    assert note["actor_name"] == "فني العداد"
     manager_yard = _yard(client, token, "PUMP-OVR", ["8000.000"])
     manager_shift = _session(client, token, "2026-11-06")
     manager_nozzle = manager_yard["nozzles"][0]
@@ -323,8 +325,9 @@ def test_meter_edit_is_allowed_for_operator_and_manager_and_stays_visible(client
     assert closed.status_code == 200, closed.text
     pending = client.get(f"/api/v1/duties/{duty_id}", headers=auth_header(token)).json()
     assert pending["status"] == "pending_approval"
-    assert pending["lines"][0]["meter_adjusted"] is True
-    assert pending["lines"][0]["previous_meter"] == "8000.000"
+    assert pending["lines"][0]["opening_meter"] == "8005.000"
+    assert pending["meter_adjustments"][0]["previous_meter"] == "8000.000"
+    assert pending["meter_adjustments"][0]["new_meter"] == "8005.000"
     assert pending["expected_cash"] == "1.50"
 
 

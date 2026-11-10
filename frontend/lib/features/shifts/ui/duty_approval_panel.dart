@@ -264,7 +264,7 @@ class DutyApprovalCard extends StatelessWidget {
   }
 
   Future<void> _adjust(BuildContext context) async {
-    final request = await showMeterEditDialog(context, lines: duty.lines);
+    final request = await showMeterEditDialog(context, lines: duty.lines, adjustments: duty.meterAdjustments);
     if (request == null || !context.mounted || onAdjustMeters == null) {
       return;
     }

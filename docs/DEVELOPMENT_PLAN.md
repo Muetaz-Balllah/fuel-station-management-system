@@ -264,15 +264,9 @@ Conventions for every table: `id UUID` primary key, `station_id UUID NOT NULL` (
 | logo_url | nullable |
 | timezone | default `Africa/Tripoli` |
 
-**roles** — `code`, `name_ar`, `is_system` (seeded roles cannot be deleted).
+There is no `roles`, `permissions`, or `role_permissions` table. The two roles are `station_manager` and `operator`, stored on `users.role`. What each role may do is fixed in the server.
 
-**permissions** — stable string codes. Seed:
-
-`dashboard.view`, `assets.manage`, `supply.manage`, `supply.receive`, `attendance.manage`, `shifts.operate`, `shifts.approve`, `shifts.view_all`, `prices.manage`, `settings.manage`, `users.manage`, `reports.export`, `meter.override`, `inventory.adjust`.
-
-**role_permissions** — role_id, permission_id. Unique pair.
-
-Seed grants:
+Seed behavior:
 
 | Role | Gets | Does not get |
 | --- | --- | --- |
@@ -283,7 +277,7 @@ Seed grants:
 
 | Column | Notes |
 | --- | --- |
-| role_id | |
+| role | `station_manager` or `operator` |
 | employee_code | `EMP-0122` |
 | full_name | |
 | username | unique per station, this is the login |
@@ -405,7 +399,7 @@ An operator with two pumps has two assignment rows and one attendance row. The a
 | cash_handed | null until submit |
 | expected_cash, variance | null until submit, recomputed on the server |
 
-**shift_readings** — one per nozzle on the duty.
+**shift_readings** — one sale line per nozzle on the duty. A meter correction is not copied onto this row.
 
 | Column | Notes |
 | --- | --- |
@@ -413,6 +407,8 @@ An operator with two pumps has two assignment rows and one attendance row. The a
 | opening_meter, closing_meter | closing null while open |
 | liters, unit_price, line_amount | null until close |
 | price_id | the `fuel_prices` row that was active at open |
+
+**nozzle_meter_adjustments** — one row per meter correction. `nozzle_id`, `actor_id`, `previous_meter`, `new_meter`, `reason`, `created_at`. `duty_id` stays empty when the nozzle has no shift yet, and a later correction on the same shift is another row.
 
 **notifications** — user_id nullable (null means every manager), kind (`tank_critical`, `duty_pending`, `license_due`, `order_stale`), title, body, read_at, entity reference.
 
@@ -544,8 +540,7 @@ All paths are under `/api/v1`. Auth is required except login and refresh.
 | POST | `/station/logo` | multipart, `settings.manage` |
 | GET, POST | `/users` | `users.manage` |
 | PATCH | `/users/{id}` | includes `is_active`, role, reset password |
-| GET | `/roles` | `users.manage` |
-| PUT | `/roles/{id}/permissions` | `users.manage` (station manager) |
+| GET | `/roles` | `users.manage`; returns the two role values, not rows from a roles table |
 | GET, POST | `/products` | POST `prices.manage` |
 | GET, POST | `/products/{id}/prices` | POST adds a new effective price, does not edit the old row |
 | GET, POST, PATCH | `/shift-templates` | `settings.manage` |
@@ -685,7 +680,7 @@ Each phase lists the backend work, the Flutter work, and the checks that mean �
 
 **Outcome.** A seeded manager and a seeded operator can log in and land in the correct chrome. Nobody else can.
 
-**Backend.** Compose file for Postgres. SQLModel metadata and Alembic baseline: `stations`, `roles`, `permissions`, `role_permissions`, `users`, `refresh_tokens`. Seed station محطة طريق المطار, the three roles, the permission grants in section 4, one manager, one operator. Implement login, refresh, logout, the auth dependency, and `403` when a permission is missing. CORS for the Flutter desktop origin.
+**Backend.** Compose file for Postgres. SQLModel metadata and Alembic baseline: `stations`, `users`, `refresh_tokens`. Seed station محطة طريق المطار, one manager, and one operator. The user role is a column, and what each role may do is fixed in the server. Implement login, refresh, logout, the auth dependency, and `403` when a permission is missing. CORS for the Flutter desktop origin.
 
 **Flutter.** Theme tokens from section 1. `LoginScreen` matching `code1.html`: split brand panel on wide windows, form only on narrow, RTL, password visibility, remember me, forgot-password dialog that says to contact the manager. On success, route by role. Manager shell with sidebar entries that exist so far (home placeholder titled لوحة القيادة, logout). Operator shell with the top bar from `code8.html` / `code7.html` and a placeholder that says no shift is assigned yet. Dio interceptor refreshes the access token once on `401`, then logs out.
 

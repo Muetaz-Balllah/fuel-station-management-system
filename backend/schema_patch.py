@@ -4,6 +4,19 @@ from sqlalchemy import inspect, text
 from sqlalchemy.engine import Engine
 
 
+def apply_schema_updates(engine: Engine) -> None:
+    """Bring an existing database in line with the current models.
+
+    Local development uses SQLite. Render uses Neon PostgreSQL, and create_all
+    does not alter tables that already exist.
+    """
+    if str(engine.url).startswith("sqlite"):
+        apply_sqlite_patches(engine)
+        return
+    _migrate_user_role_postgres(engine)
+    drop_copied_meter_columns(engine)
+
+
 def apply_sqlite_patches(engine: Engine) -> None:
     if not str(engine.url).startswith("sqlite"):
         return
@@ -14,10 +27,6 @@ def apply_sqlite_patches(engine: Engine) -> None:
         ("users", "photo_url", "ALTER TABLE users ADD COLUMN photo_url VARCHAR(300)"),
         ("shift_duties", "rostered_user_id", "ALTER TABLE shift_duties ADD COLUMN rostered_user_id VARCHAR(36)"),
         ("shift_templates", "business_date", "ALTER TABLE shift_templates ADD COLUMN business_date DATE"),
-        ("shift_readings", "meter_adjusted", "ALTER TABLE shift_readings ADD COLUMN meter_adjusted BOOLEAN NOT NULL DEFAULT 0"),
-        ("shift_readings", "previous_meter", "ALTER TABLE shift_readings ADD COLUMN previous_meter NUMERIC(16, 3)"),
-        ("shift_readings", "meter_reason", "ALTER TABLE shift_readings ADD COLUMN meter_reason VARCHAR(300)"),
-        ("shift_readings", "adjusted_by", "ALTER TABLE shift_readings ADD COLUMN adjusted_by VARCHAR(36)"),
     ]
     with engine.begin() as conn:
         for table, column, ddl in patches:
@@ -27,6 +36,25 @@ def apply_sqlite_patches(engine: Engine) -> None:
             if column not in names:
                 conn.execute(text(ddl))
     _migrate_user_role(engine)
+    drop_copied_meter_columns(engine)
+
+
+def drop_copied_meter_columns(engine: Engine) -> None:
+    """The correction log is nozzle_meter_adjustments. These reading columns copied it."""
+    inspector = inspect(engine)
+    if "shift_readings" not in set(inspector.get_table_names()):
+        return
+    names = {col["name"] for col in inspector.get_columns("shift_readings")}
+    extras = [
+        name
+        for name in ("meter_adjusted", "previous_meter", "meter_reason", "adjusted_by")
+        if name in names
+    ]
+    if not extras:
+        return
+    with engine.begin() as conn:
+        for name in extras:
+            conn.execute(text(f"ALTER TABLE shift_readings DROP COLUMN {name}"))
 
 
 def _migrate_user_role(engine: Engine) -> None:
@@ -109,3 +137,68 @@ def _migrate_user_role(engine: Engine) -> None:
         raw.commit()
     finally:
         raw.close()
+
+
+def _migrate_user_role_postgres(engine: Engine) -> None:
+    inspector = inspect(engine)
+    tables = set(inspector.get_table_names())
+    if "users" not in tables:
+        return
+    names = {col["name"] for col in inspector.get_columns("users")}
+    role_code = "code" in {
+        col["name"] for col in inspector.get_columns("roles")
+    } if "roles" in tables else False
+    with engine.begin() as conn:
+        if "role" not in names:
+            conn.execute(text("ALTER TABLE users ADD COLUMN role VARCHAR(32)"))
+        if "role_id" in names and role_code:
+            conn.execute(
+                text(
+                    """
+                    UPDATE users AS u
+                    SET role = r.code
+                    FROM roles AS r
+                    WHERE u.role_id = r.id
+                      AND (u.role IS NULL OR btrim(u.role) = '')
+                    """
+                )
+            )
+        conn.execute(
+            text(
+                """
+                UPDATE users
+                SET role = 'operator'
+                WHERE role IS NULL OR btrim(role) = '' OR role = 'system_admin'
+                """
+            )
+        )
+        if "role_id" in names:
+            conn.execute(
+                text(
+                    """
+                    DO $$
+                    DECLARE constraint_row record;
+                    BEGIN
+                      FOR constraint_row IN
+                        SELECT c.conname
+                        FROM pg_constraint c
+                        JOIN pg_class t ON t.oid = c.conrelid
+                        JOIN pg_attribute a
+                          ON a.attrelid = t.oid AND a.attnum = ANY (c.conkey)
+                        WHERE t.relname = 'users'
+                          AND a.attname = 'role_id'
+                      LOOP
+                        EXECUTE format(
+                          'ALTER TABLE users DROP CONSTRAINT %I',
+                          constraint_row.conname
+                        );
+                      END LOOP;
+                    END $$;
+                    """
+                )
+            )
+            conn.execute(text("ALTER TABLE users DROP COLUMN IF EXISTS role_id"))
+        conn.execute(text("ALTER TABLE users ALTER COLUMN role SET NOT NULL"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_users_role ON users (role)"))
+        for table in ("role_permissions", "permissions", "roles"):
+            conn.execute(text(f"DROP TABLE IF EXISTS {table} CASCADE"))

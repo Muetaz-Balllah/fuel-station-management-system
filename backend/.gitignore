@@ -3,6 +3,9 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 .env
+.env.*
+!.env.example
+!.env.production.example
 *.pyc
 fuel_station.db
 fuel_station.legacy.db

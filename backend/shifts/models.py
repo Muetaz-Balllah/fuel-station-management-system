@@ -48,10 +48,6 @@ class ShiftReading(SQLModel, table=True):
     liters: Decimal | None = Field(default=None, sa_column=Column(Numeric(14, 3)))
     unit_price: Decimal = Field(sa_column=Column(Numeric(14, 3), nullable=False))
     line_amount: Decimal | None = Field(default=None, sa_column=Column(Numeric(14, 2)))
-    meter_adjusted: bool = False
-    previous_meter: Decimal | None = Field(default=None, sa_column=Column(Numeric(16, 3)))
-    meter_reason: str | None = Field(default=None, max_length=300)
-    adjusted_by: uuid.UUID | None = Field(default=None, foreign_key="users.id")
     rollover: bool = False
     rollover_at: Decimal | None = Field(default=None, sa_column=Column(Numeric(16, 3)))
     created_at: datetime = Field(default_factory=utcnow)

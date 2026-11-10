@@ -32,7 +32,7 @@ class DutyCloseReviewBody extends StatelessWidget {
         else
           HorizontalDataTable(
             minWidth: _LinesTable.minWidth,
-            child: _LinesTable(lines: duty.lines),
+            child: _LinesTable(lines: duty.lines, adjustments: duty.meterAdjustments),
           ),
         const SizedBox(height: 12),
         _TotalsStrip(duty: duty),
@@ -72,7 +72,9 @@ class _MetaStrip extends StatelessWidget {
 }
 
 class _LinesTable extends StatelessWidget {
-  const _LinesTable({required this.lines});
+  const _LinesTable({required this.lines, required this.adjustments});
+
+  final List<MeterAdjustment> adjustments;
 
   /// Column widths plus horizontal row padding (8 + 8).
   static const minWidth = 720.0;
@@ -137,11 +139,17 @@ class _LinesTable extends StatelessWidget {
                   ),
                   SizedBox(
                     width: opening,
-                    child: Text(
-                      line.meterAdjusted ? '${line.openingMeter}\nعُدّل من ${line.previousMeter ?? '—'}' : line.openingMeter,
-                      style: cell.copyWith(color: line.meterAdjusted ? const Color(0xFFB45309) : null, fontWeight: line.meterAdjusted ? FontWeight.w700 : null),
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
+                    child: Builder(
+                      builder: (context) {
+                        final prior = adjustments.where((item) => item.nozzleId == line.nozzleId).toList();
+                        final adjusted = prior.isNotEmpty;
+                        return Text(
+                          adjusted ? '${line.openingMeter}\nعُدّل من ${prior.first.previousMeter}' : line.openingMeter,
+                          style: cell.copyWith(color: adjusted ? const Color(0xFFB45309) : null, fontWeight: adjusted ? FontWeight.w700 : null),
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                        );
+                      },
                     ),
                   ),
                   SizedBox(
@@ -192,19 +200,7 @@ class _MeterAdjustmentNotice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final notes = duty.meterAdjustments.isNotEmpty
-        ? duty.meterAdjustments
-        : [
-            for (final line in duty.lines.where((item) => item.meterAdjusted))
-              MeterAdjustment(
-                nozzleCode: line.nozzleCode,
-                previousMeter: line.previousMeter ?? '—',
-                newMeter: line.openingMeter,
-                reason: line.meterReason ?? '',
-                actorName: line.adjustedByName ?? '',
-                createdAtLabel: '',
-              ),
-          ];
+    final notes = duty.meterAdjustments;
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(

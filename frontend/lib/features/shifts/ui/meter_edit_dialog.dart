@@ -12,6 +12,7 @@ class MeterEditRequest {
 Future<MeterEditRequest?> showMeterEditDialog(
   BuildContext context, {
   required List<DutyLine> lines,
+  List<MeterAdjustment> adjustments = const [],
 }) {
   final controllers = {for (final line in lines) line.nozzleId: TextEditingController(text: line.openingMeter)};
   final reason = TextEditingController();
@@ -38,9 +39,13 @@ Future<MeterEditRequest?> showMeterEditDialog(
                       controller: controllers[line.nozzleId],
                       decoration: InputDecoration(
                         labelText: 'مسدس ${line.nozzleCode} • ${line.productName}',
-                        helperText: line.meterAdjusted
-                            ? 'القراءة السابقة ${line.previousMeter ?? line.openingMeter}'
-                            : 'القراءة الحالية ${line.openingMeter}',
+                        helperText: () {
+                          final prior = adjustments.where((item) => item.nozzleId == line.nozzleId).toList();
+                          if (prior.isEmpty) {
+                            return 'القراءة الحالية ${line.openingMeter}';
+                          }
+                          return 'القراءة السابقة ${prior.first.previousMeter}';
+                        }(),
                       ),
                     ),
                     const SizedBox(height: 8),
